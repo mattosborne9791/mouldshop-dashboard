@@ -306,12 +306,28 @@ async function init() {
   setStatus('grey', 'Not connected');
 }
 
-function onAuthenticated() {
+async function onAuthenticated() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('dashboard').style.display = '';
   document.getElementById('connect-btn').style.display = 'none';
   document.getElementById('refresh-btn').style.display = '';
-  setStatus('live', 'Live');
+  setStatus('live', 'Connected — probing BC API…');
+
+  // Debug: try Companies endpoint first to verify token + permissions
+  const dbg = document.getElementById('entity-debug');
+  dbg.style.display = '';
+  dbg.textContent = 'Checking BC connection…';
+
+  try {
+    const r1 = await fetch('https://api.businesscentral.dynamics.com/v2.0/' + TENANT + '/Production/ODataV4/Companies', {
+      headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' }
+    });
+    const t1 = await r1.text();
+    dbg.textContent = 'Companies endpoint (' + r1.status + '): ' + t1.slice(0, 400);
+  } catch(e) {
+    dbg.textContent = 'Companies probe error: ' + e.message;
+  }
+
   fetchAll();
   clearInterval(refreshTimer);
   refreshTimer = setInterval(fetchAll, REFRESH_MS);
