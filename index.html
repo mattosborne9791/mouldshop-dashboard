@@ -311,26 +311,7 @@ async function onAuthenticated() {
   document.getElementById('dashboard').style.display = '';
   document.getElementById('connect-btn').style.display = 'none';
   document.getElementById('refresh-btn').style.display = '';
-  setStatus('live', 'Connected — probing BC API…');
-
-  // Debug: try Companies endpoint first to verify token + permissions
-  const dbg = document.getElementById('entity-debug');
-  dbg.style.display = '';
-  dbg.textContent = 'Checking BC connection…';
-
-  try {
-    // Fetch $metadata to get all entity set names
-    const r1 = await fetch(BC_BASE + '$metadata', {
-      headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/xml' }
-    });
-    const t1 = await r1.text();
-    // Extract EntitySet names from XML
-    const matches = [...t1.matchAll(/EntitySet[^>]+Name="([^"]+)"/g)].map(m => m[1]);
-    dbg.textContent = 'BC EntitySets (' + r1.status + '): ' + (matches.length ? matches.join(', ') : t1.slice(0, 600));
-  } catch(e) {
-    dbg.textContent = 'Metadata probe error: ' + e.message;
-  }
-
+  setStatus('live', 'Connected…');
   fetchAll();
   clearInterval(refreshTimer);
   refreshTimer = setInterval(fetchAll, REFRESH_MS);
@@ -381,19 +362,6 @@ function statusTag(s) {
   return `<span class="tag tag-neu">${s}</span>`;
 }
 
-// Try a list of candidate entity names, return first that responds 200
-async function probeEntity(candidates) {
-  for (const name of candidates) {
-    try {
-      const res = await fetch(BC_BASE + name + '?$top=1', {
-        headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' }
-      });
-      if (res.ok) { console.log('✓ BC entity found:', name); return name; }
-      console.log('✗ BC entity not found:', name, res.status);
-    } catch(e) {}
-  }
-  return null;
-}
 
 async function fetchAll() {
   const dbg = document.getElementById('entity-debug');
