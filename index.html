@@ -421,7 +421,7 @@ async function fetchAll() {
     dbg.textContent = 'Companies found: ' + companies.map(c => c.name + ' (id:' + c.id + ')').join(' · ');
     if (!companies.length) { setStatus('grey', 'No companies returned'); return; }
     // Pick "Live Mouldshop" or first
-    const match = companies.find(c => c.name.toLowerCase().includes('live')) || companies[0];
+    const match = companies.find(c => c.name && c.name.toLowerCase().includes('live')) || companies[0];
     companyId = match.id;
     companyName = match.name;
     dbg.textContent += ' → Using: ' + companyName;
