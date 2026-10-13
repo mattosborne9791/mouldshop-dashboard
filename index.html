@@ -396,41 +396,40 @@ async function probeEntity(candidates) {
 }
 
 async function fetchAll() {
+  const dbg = document.getElementById('entity-debug');
+  dbg.style.display = '';
+  dbg.textContent = 'Fetching BC metadata…';
   setStatus('grey', 'Refreshing…');
+
+  // Step 1: get metadata to find real entity names
+  let entityNames = [];
   try {
-    // Probe for correct entity names
-    const [soName, poName, itmName] = await Promise.all([
-      probeEntity(['salesOrder','salesOrders','SalesOrder','SalesOrders']),
-      probeEntity(['purchaseOrder','purchaseOrders','PurchaseOrder','PurchaseOrders','purchase_Order','purchInvHeader']),
-      probeEntity(['item','items','Item','Items','inventoryItem','stockItem'])
-    ]);
+    const mr = await fetch(BC_BASE + '$metadata', {
+      headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    const mt = await mr.text();
+    entityNames = [...mt.matchAll(/Name="([^"]+)"/g)].map(m => m[1]);
+    dbg.textContent = 'Metadata status ' + mr.status + ' | Names found: ' + entityNames.slice(0,60).join(', ');
+    if (!mr.ok) { setStatus('grey', 'Metadata failed ' + mr.status); return; }
+  } catch(e) {
+    dbg.textContent = 'Metadata fetch error: ' + e.message;
+    setStatus('grey', 'Metadata error');
+    return;
+  }
 
-    // Show probe results — metadata result overwrites this if it loads
-    const dbg = document.getElementById('entity-debug');
-    if (dbg) {
-      dbg.textContent = `BC entities resolved → SO: ${soName||'NOT FOUND'} · PO: ${poName||'NOT FOUND'} · Items: ${itmName||'NOT FOUND'}`;
-      dbg.style.display = '';
-    }
-    console.log('Probing complete. SO:', soName, 'PO:', poName, 'Items:', itmName);
-    // Now fetch metadata and overwrite the bar with all entity names
-    try {
-      const mr = await fetch(BC_BASE + '$metadata', { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/xml' } });
-      const mt = await mr.text();
-      const names = [...mt.matchAll(/EntitySet[^>]+Name="([^"]+)"/g)].map(m => m[1]);
-      if (dbg) dbg.textContent = 'ALL BC entities (' + mr.status + '): ' + (names.length ? names.join(' · ') : mt.slice(0,600));
-    } catch(e) { if(dbg) dbg.textContent += ' | metadata err: ' + e.message; }
+  // Step 2: pick best matching names
+  const find = (...candidates) => entityNames.find(n => candidates.some(c => n.toLowerCase() === c.toLowerCase())) || null;
+  const soName  = find('salesOrder','salesOrders','SalesOrder','SalesOrders');
+  const poName  = find('purchaseOrder','purchaseOrders','PurchaseOrder','PurchaseOrders');
+  const itmName = find('item','items','Item','Items');
+  dbg.textContent += ' | SO=' + (soName||'?') + ' PO=' + (poName||'?') + ' Items=' + (itmName||'?');
 
-    if (!soName && !poName && !itmName) {
-      setStatus('grey', 'Could not find BC entities — see blue bar');
-      return;
-    }
-
+  try {
     const results = await Promise.all([
       soName  ? bcFetch(`${soName}?$top=50`) : Promise.resolve({value:[]}),
       poName  ? bcFetch(`${poName}?$top=50`) : Promise.resolve({value:[]}),
       itmName ? bcFetch(`${itmName}?$top=500`) : Promise.resolve({value:[]})
     ]);
-
     renderSO(results[0].value || []);
     renderPO(results[1].value || []);
     renderItems(results[2].value || []);
