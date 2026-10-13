@@ -364,10 +364,11 @@ function statusTag(s) {
 async function fetchAll() {
   setStatus('grey', 'Refreshing…');
   try {
+    // BC OData v4 — try camelCase entity names (standard for BC API v2.0)
     const [soData, poData, itemData] = await Promise.all([
-      bcFetch("SalesOrders?$select=number,sellToCustomerName,orderDate,amount,status&$filter=status ne 'Invoiced'&$orderby=orderDate desc&$top=50"),
-      bcFetch("PurchaseOrders?$select=number,vendorName,orderDate,totalAmountIncludingTax,status&$filter=status ne 'Invoiced'&$orderby=orderDate desc&$top=50"),
-      bcFetch("Items?$select=number,displayName,unitOfMeasure,inventory,reorderPoint,blocked&$filter=blocked eq false&$top=500")
+      bcFetch("salesOrders?$select=number,sellToCustomerName,orderDate,totalAmountIncludingTax,status&$filter=status ne 'Invoiced'&$orderby=orderDate desc&$top=50"),
+      bcFetch("purchaseOrders?$select=number,vendorName,orderDate,totalAmountIncludingTax,status&$filter=status ne 'Invoiced'&$orderby=orderDate desc&$top=50"),
+      bcFetch("items?$select=number,displayName,inventory,reorderPoint,blocked&$filter=blocked eq false&$top=500")
     ]);
     renderSO(soData.value || []);
     renderPO(poData.value || []);
@@ -380,7 +381,7 @@ async function fetchAll() {
 }
 
 function renderSO(rows) {
-  const tot = rows.reduce((s,r) => s + Number(r.amount||0), 0);
+  const tot = rows.reduce((s,r) => s + Number(r.totalAmountIncludingTax||r.amount||0), 0);
   document.getElementById('kpi-so').textContent  = num(rows.length);
   document.getElementById('kpi-sov').textContent = gbp(tot);
   document.getElementById('so-count').textContent = rows.length;
@@ -389,11 +390,11 @@ function renderSO(rows) {
     <td class="mono">${r.number||'—'}</td>
     <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.sellToCustomerName||'—'}</td>
     <td style="white-space:nowrap">${fmtd(r.orderDate)}</td>
-    <td style="text-align:right">${gbp(r.amount)}</td>
+    <td style="text-align:right">${gbp(r.totalAmountIncludingTax||r.amount)}</td>
     <td>${statusTag(r.status)}</td></tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No open sales orders</td></tr>';
   const byCust = {};
-  rows.forEach(r => { const k=r.sellToCustomerName||'Unknown'; byCust[k]=(byCust[k]||0)+Number(r.amount||0); });
+  rows.forEach(r => { const k=r.sellToCustomerName||'Unknown'; byCust[k]=(byCust[k]||0)+Number(r.totalAmountIncludingTax||r.amount||0); });
   renderChart('cust-chart', byCust);
 }
 
