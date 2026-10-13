@@ -397,9 +397,9 @@ async function fetchAll() {
   try {
     // Probe for correct entity names
     const [soName, poName, itmName] = await Promise.all([
-      probeEntity(['salesOrders','SalesOrders','salesOrder','SalesOrder']),
-      probeEntity(['purchaseOrders','PurchaseOrders','purchaseOrder','PurchaseOrder']),
-      probeEntity(['items','Items','item','Item'])
+      probeEntity(['salesOrder','salesOrders','SalesOrder','SalesOrders']),
+      probeEntity(['purchaseOrder','purchaseOrders','PurchaseOrder','PurchaseOrders','purchase_Order','purchInvHeader']),
+      probeEntity(['item','items','Item','Items','inventoryItem','stockItem'])
     ]);
 
     const dbg = document.getElementById('entity-debug');
@@ -407,6 +407,8 @@ async function fetchAll() {
       dbg.textContent = `BC entities resolved → SO: ${soName||'NOT FOUND'} · PO: ${poName||'NOT FOUND'} · Items: ${itmName||'NOT FOUND'}`;
       dbg.style.display = '';
     }
+    // Log first SO record field names to help identify correct field names
+    console.log('Probing complete. SO:', soName, 'PO:', poName, 'Items:', itmName);
 
     if (!soName && !poName && !itmName) {
       setStatus('grey', 'Could not find BC entities — see blue bar');
@@ -414,9 +416,9 @@ async function fetchAll() {
     }
 
     const results = await Promise.all([
-      soName  ? bcFetch(`${soName}?$select=number,sellToCustomerName,orderDate,totalAmountIncludingTax,status&$filter=status ne 'Invoiced'&$orderby=orderDate desc&$top=50`) : Promise.resolve({value:[]}),
-      poName  ? bcFetch(`${poName}?$select=number,vendorName,orderDate,totalAmountIncludingTax,status&$filter=status ne 'Invoiced'&$orderby=orderDate desc&$top=50`) : Promise.resolve({value:[]}),
-      itmName ? bcFetch(`${itmName}?$select=number,displayName,inventory,reorderPoint,blocked&$filter=blocked eq false&$top=500`) : Promise.resolve({value:[]})
+      soName  ? bcFetch(`${soName}?$top=50`) : Promise.resolve({value:[]}),
+      poName  ? bcFetch(`${poName}?$top=50`) : Promise.resolve({value:[]}),
+      itmName ? bcFetch(`${itmName}?$top=500`) : Promise.resolve({value:[]})
     ]);
 
     renderSO(results[0].value || []);
