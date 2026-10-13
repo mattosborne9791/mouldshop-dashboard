@@ -405,13 +405,20 @@ async function fetchAll() {
       probeEntity(['item','items','Item','Items','inventoryItem','stockItem'])
     ]);
 
+    // Show probe results — metadata result overwrites this if it loads
     const dbg = document.getElementById('entity-debug');
     if (dbg) {
       dbg.textContent = `BC entities resolved → SO: ${soName||'NOT FOUND'} · PO: ${poName||'NOT FOUND'} · Items: ${itmName||'NOT FOUND'}`;
       dbg.style.display = '';
     }
-    // Log first SO record field names to help identify correct field names
     console.log('Probing complete. SO:', soName, 'PO:', poName, 'Items:', itmName);
+    // Now fetch metadata and overwrite the bar with all entity names
+    try {
+      const mr = await fetch(BC_BASE + '$metadata', { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/xml' } });
+      const mt = await mr.text();
+      const names = [...mt.matchAll(/EntitySet[^>]+Name="([^"]+)"/g)].map(m => m[1]);
+      if (dbg) dbg.textContent = 'ALL BC entities (' + mr.status + '): ' + (names.length ? names.join(' · ') : mt.slice(0,600));
+    } catch(e) { if(dbg) dbg.textContent += ' | metadata err: ' + e.message; }
 
     if (!soName && !poName && !itmName) {
       setStatus('grey', 'Could not find BC entities — see blue bar');
