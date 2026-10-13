@@ -165,6 +165,7 @@ tr:hover td { background: var(--bg); }
     <button class="btn btn-primary" id="connect-btn" onclick="startAuth()">Connect</button>
   </div>
 </div>
+<div id="entity-debug" style="display:none;background:#1a1f2e;color:#6fb3ff;font-size:11px;font-family:monospace;padding:6px 20px;word-break:break-all;"></div>
 
 <div id="auth-screen" class="auth-screen">
   <div class="auth-card">
@@ -361,18 +362,50 @@ function statusTag(s) {
   return `<span class="tag tag-neu">${s}</span>`;
 }
 
+// Try a list of candidate entity names, return first that responds 200
+async function probeEntity(candidates) {
+  for (const name of candidates) {
+    try {
+      const res = await fetch(BC_BASE + name + '?$top=1', {
+        headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' }
+      });
+      if (res.ok) { console.log('✓ BC entity found:', name); return name; }
+      console.log('✗ BC entity not found:', name, res.status);
+    } catch(e) {}
+  }
+  return null;
+}
+
 async function fetchAll() {
   setStatus('grey', 'Refreshing…');
   try {
-    // BC OData v4 — try camelCase entity names (standard for BC API v2.0)
-    const [soData, poData, itemData] = await Promise.all([
-      bcFetch("salesOrders?$select=number,sellToCustomerName,orderDate,totalAmountIncludingTax,status&$filter=status ne 'Invoiced'&$orderby=orderDate desc&$top=50"),
-      bcFetch("purchaseOrders?$select=number,vendorName,orderDate,totalAmountIncludingTax,status&$filter=status ne 'Invoiced'&$orderby=orderDate desc&$top=50"),
-      bcFetch("items?$select=number,displayName,inventory,reorderPoint,blocked&$filter=blocked eq false&$top=500")
+    // Probe for correct entity names
+    const [soName, poName, itmName] = await Promise.all([
+      probeEntity(['salesOrders','SalesOrders','salesOrder','SalesOrder']),
+      probeEntity(['purchaseOrders','PurchaseOrders','purchaseOrder','PurchaseOrder']),
+      probeEntity(['items','Items','item','Item'])
     ]);
-    renderSO(soData.value || []);
-    renderPO(poData.value || []);
-    renderItems(itemData.value || []);
+
+    const dbg = document.getElementById('entity-debug');
+    if (dbg) {
+      dbg.textContent = `BC entities resolved → SO: ${soName||'NOT FOUND'} · PO: ${poName||'NOT FOUND'} · Items: ${itmName||'NOT FOUND'}`;
+      dbg.style.display = '';
+    }
+
+    if (!soName && !poName && !itmName) {
+      setStatus('grey', 'Could not find BC entities — see blue bar');
+      return;
+    }
+
+    const results = await Promise.all([
+      soName  ? bcFetch(`${soName}?$select=number,sellToCustomerName,orderDate,totalAmountIncludingTax,status&$filter=status ne 'Invoiced'&$orderby=orderDate desc&$top=50`) : Promise.resolve({value:[]}),
+      poName  ? bcFetch(`${poName}?$select=number,vendorName,orderDate,totalAmountIncludingTax,status&$filter=status ne 'Invoiced'&$orderby=orderDate desc&$top=50`) : Promise.resolve({value:[]}),
+      itmName ? bcFetch(`${itmName}?$select=number,displayName,inventory,reorderPoint,blocked&$filter=blocked eq false&$top=500`) : Promise.resolve({value:[]})
+    ]);
+
+    renderSO(results[0].value || []);
+    renderPO(results[1].value || []);
+    renderItems(results[2].value || []);
     document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
     setStatus('live', 'Live');
   } catch(e) {
