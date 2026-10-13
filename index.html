@@ -230,7 +230,7 @@ tr:hover td { background: var(--bg); }
 <script>
 const TENANT  = 'f17044ae-2b66-4aa4-951b-38908b13d18b';
 const CLIENT  = '94cf8276-e615-4d6e-a825-fb71f5568b8b';
-const BC_BASE = "https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/Company('Live%20Mouldshop')/";
+const BC_BASE = "https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/Company(64831692-9eaf-ec11-8aa5-0022481b4e2d)/";
 const SCOPE   = 'https://api.businesscentral.dynamics.com/.default';
 // REDIRECT is set dynamically to wherever this file is hosted
 const REDIRECT = location.origin + location.pathname;
@@ -398,8 +398,8 @@ async function fetchAll() {
     setStatus('grey', 'Company error'); return;
   }
 
-  // Step 2: get entities using company id
-  const COMPANY_BASE = BASE_ROOT + `Company(${companyId})/`;
+  // Step 2: use hardcoded Live Mouldshop company ID
+  const COMPANY_BASE = 'https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/Company(64831692-9eaf-ec11-8aa5-0022481b4e2d)/';
   let soName = 'salesOrder', poName = 'purchaseOrder', itmName = 'item';
   dbg.textContent += ' | SO=' + soName + ' PO=' + poName + ' Items=' + itmName;
 
@@ -495,3 +495,4 @@ init();
 </script>
 </body>
 </html>
+
