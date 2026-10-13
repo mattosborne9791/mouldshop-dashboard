@@ -416,15 +416,15 @@ async function fetchAll() {
       setStatus('grey', 'Company lookup failed — see blue bar');
       return;
     }
+    dbg.textContent = 'Company raw (' + cr.status + '): ' + ct.slice(0, 800);
     const cd = JSON.parse(ct);
-    const companies = cd.value || [];
-    dbg.textContent = 'Companies found: ' + companies.map(c => c.name + ' (id:' + c.id + ')').join(' · ');
+    const companies = cd.value || (Array.isArray(cd) ? cd : [cd]);
     if (!companies.length) { setStatus('grey', 'No companies returned'); return; }
-    // Pick "Live Mouldshop" or first
-    const match = companies.find(c => c.name && c.name.toLowerCase().includes('live')) || companies[0];
-    companyId = match.id;
-    companyName = match.name;
-    dbg.textContent += ' → Using: ' + companyName;
+    // Use first company found
+    const match = companies[0];
+    companyId = match.id || match.Id || match.systemId || '';
+    companyName = match.name || match.Name || match.displayName || 'Unknown';
+    dbg.textContent = 'Companies: ' + JSON.stringify(companies.map(c => ({id:c.id||c.Id||c.systemId, name:c.name||c.Name||c.displayName}))) + ' → Using: ' + companyName;
   } catch(e) {
     dbg.textContent = 'Company fetch error: ' + e.message;
     setStatus('grey', 'Company error'); return;
