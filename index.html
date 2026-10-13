@@ -366,57 +366,48 @@ function statusTag(s) {
 async function fetchAll() {
   const dbg = document.getElementById('entity-debug');
   dbg.style.display = '';
-  dbg.textContent = 'Fetching BC metadata…';
+  dbg.textContent = 'Connecting to Live Mouldshop…';
   setStatus('grey', 'Refreshing…');
 
-  // Step 1: discover companies
-  const BASE_ROOT = `https://api.businesscentral.dynamics.com/v2.0/${TENANT}/Production/ODataV4/`;
-  let companyId = '', companyName = '';
-  try {
-    const cr = await fetch(BASE_ROOT + 'Company', { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } });
-    const ct = await cr.text();
-    dbg.textContent = 'Company endpoint (' + cr.status + '): ' + ct.slice(0, 500);
-    if (!cr.ok) {
-      // Try without environment
-      const cr2 = await fetch(`https://api.businesscentral.dynamics.com/v2.0/${TENANT}/ODataV4/Company`, { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } });
-      const ct2 = await cr2.text();
-      dbg.textContent += ' | No-env attempt (' + cr2.status + '): ' + ct2.slice(0, 300);
-      setStatus('grey', 'Company lookup failed — see blue bar');
-      return;
-    }
-    dbg.textContent = 'Company raw (' + cr.status + '): ' + ct.slice(0, 800);
-    const cd = JSON.parse(ct);
-    const companies = cd.value || (Array.isArray(cd) ? cd : [cd]);
-    if (!companies.length) { setStatus('grey', 'No companies returned'); return; }
-    // Pick Live Mouldshop specifically
-    const match = companies.find(c => (c.name||'').includes('Live Mouldshop')) || companies.find(c => (c.name||'').toLowerCase().includes('mouldshop')) || companies[0];
-    companyId = match.id || match.Id || match.systemId || '';
-    companyName = match.name || match.Name || match.displayName || 'Unknown';
-    dbg.textContent = 'Companies: ' + JSON.stringify(companies.map(c => ({id:c.id||c.Id||c.systemId, name:c.name||c.Name||c.displayName}))) + ' → Using: ' + companyName;
-  } catch(e) {
-    dbg.textContent = 'Company fetch error: ' + e.message;
-    setStatus('grey', 'Company error'); return;
-  }
-
-  // Step 2: use hardcoded Live Mouldshop company ID
   const COMPANY_BASE = 'https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/Company(64831692-9eaf-ec11-8aa5-0022481b4e2d)/';
-  let soName = 'salesOrder', poName = 'purchaseOrder', itmName = 'item';
-  dbg.textContent += ' | SO=' + soName + ' PO=' + poName + ' Items=' + itmName;
+
+  const bcGet = async (ep) => {
+    const r = await fetch(COMPANY_BASE + ep, { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } });
+    if (r.status === 401) {
+      accessToken = null;
+      try { sessionStorage.removeItem('bc_token'); } catch {}
+      document.getElementById('auth-screen').style.display = 'flex';
+      document.getElementById('dashboard').style.display = 'none';
+      document.getElementById('connect-btn').style.display = '';
+      setStatus('grey', 'Session expired — please reconnect');
+      throw new Error('Token expired');
+    }
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      throw new Error('BC ' + r.status + ' on ' + ep.split('?')[0] + (txt ? ': ' + txt.slice(0,200) : ''));
+    }
+    return r.json();
+  };
 
   try {
-    const bcFetchDyn = ep => fetch(COMPANY_BASE + ep, { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } }).then(r => { if (!r.ok) throw new Error('BC API ' + r.status + ' on ' + ep); return r.json(); });
-    const results = await Promise.all([
-      bcFetchDyn(`${soName}?$select=number,sellToCustomerName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50`),
-      bcFetchDyn(`${poName}?$select=number,vendorName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50`),
-      bcFetchDyn(`${itmName}?$select=number,displayName,inventory,reorderPoint,blocked&$filter=blocked eq false&$top=500`)
+    dbg.textContent = 'Live Mouldshop · fetching sales orders, purchase orders, items…';
+    const [soRes, poRes, itmRes] = await Promise.all([
+      bcGet('salesOrder?$select=number,sellToCustomerName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50'),
+      bcGet('purchaseOrder?$select=number,vendorName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50'),
+      bcGet('item?$select=number,displayName,inventory,reorderPoint&$top=500')
     ]);
-    renderSO(results[0].value || []);
-    renderPO(results[1].value || []);
-    renderItems(results[2].value || []);
+    renderSO(soRes.value || []);
+    renderPO(poRes.value || []);
+    renderItems(itmRes.value || []);
     document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
+    dbg.textContent = 'Live Mouldshop · ' + (soRes.value||[]).length + ' sales orders · ' + (poRes.value||[]).length + ' purchase orders · ' + (itmRes.value||[]).length + ' items';
     setStatus('live', 'Live');
   } catch(e) {
-    if (e.message !== 'Token expired') { setStatus('grey', 'Fetch error — check console'); console.error(e); }
+    if (e.message !== 'Token expired') {
+      dbg.textContent = 'Error: ' + e.message;
+      setStatus('grey', 'Data error — see blue bar');
+      console.error(e);
+    }
   }
 }
 
@@ -495,4 +486,3 @@ init();
 </script>
 </body>
 </html>
-
