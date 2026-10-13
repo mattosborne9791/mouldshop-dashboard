@@ -401,34 +401,46 @@ async function fetchAll() {
   dbg.textContent = 'Fetching BC metadata…';
   setStatus('grey', 'Refreshing…');
 
-  // Step 1: get metadata to find real entity names
-  let entityNames = [];
+  // Step 1: discover companies
+  const BASE_ROOT = `https://api.businesscentral.dynamics.com/v2.0/${TENANT}/Production/ODataV4/`;
+  let companyId = '', companyName = '';
   try {
-    const mr = await fetch(BC_BASE + '$metadata', {
-      headers: { Authorization: 'Bearer ' + accessToken }
-    });
-    const mt = await mr.text();
-    entityNames = [...mt.matchAll(/Name="([^"]+)"/g)].map(m => m[1]);
-    dbg.textContent = 'Metadata status ' + mr.status + ' | Names found: ' + entityNames.slice(0,60).join(', ');
-    if (!mr.ok) { setStatus('grey', 'Metadata failed ' + mr.status); return; }
+    const cr = await fetch(BASE_ROOT + 'Company', { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } });
+    const ct = await cr.text();
+    dbg.textContent = 'Company endpoint (' + cr.status + '): ' + ct.slice(0, 500);
+    if (!cr.ok) {
+      // Try without environment
+      const cr2 = await fetch(`https://api.businesscentral.dynamics.com/v2.0/${TENANT}/ODataV4/Company`, { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } });
+      const ct2 = await cr2.text();
+      dbg.textContent += ' | No-env attempt (' + cr2.status + '): ' + ct2.slice(0, 300);
+      setStatus('grey', 'Company lookup failed — see blue bar');
+      return;
+    }
+    const cd = JSON.parse(ct);
+    const companies = cd.value || [];
+    dbg.textContent = 'Companies found: ' + companies.map(c => c.name + ' (id:' + c.id + ')').join(' · ');
+    if (!companies.length) { setStatus('grey', 'No companies returned'); return; }
+    // Pick "Live Mouldshop" or first
+    const match = companies.find(c => c.name.toLowerCase().includes('live')) || companies[0];
+    companyId = match.id;
+    companyName = match.name;
+    dbg.textContent += ' → Using: ' + companyName;
   } catch(e) {
-    dbg.textContent = 'Metadata fetch error: ' + e.message;
-    setStatus('grey', 'Metadata error');
-    return;
+    dbg.textContent = 'Company fetch error: ' + e.message;
+    setStatus('grey', 'Company error'); return;
   }
 
-  // Step 2: pick best matching names
-  const find = (...candidates) => entityNames.find(n => candidates.some(c => n.toLowerCase() === c.toLowerCase())) || null;
-  const soName  = find('salesOrder','salesOrders','SalesOrder','SalesOrders');
-  const poName  = find('purchaseOrder','purchaseOrders','PurchaseOrder','PurchaseOrders');
-  const itmName = find('item','items','Item','Items');
-  dbg.textContent += ' | SO=' + (soName||'?') + ' PO=' + (poName||'?') + ' Items=' + (itmName||'?');
+  // Step 2: get entities using company id
+  const COMPANY_BASE = BASE_ROOT + `Company(${companyId})/`;
+  let soName = 'salesOrder', poName = 'purchaseOrder', itmName = 'item';
+  dbg.textContent += ' | SO=' + soName + ' PO=' + poName + ' Items=' + itmName;
 
   try {
+    const bcFetchDyn = ep => fetch(COMPANY_BASE + ep, { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } }).then(r => { if (!r.ok) throw new Error('BC API ' + r.status + ' on ' + ep); return r.json(); });
     const results = await Promise.all([
-      soName  ? bcFetch(`${soName}?$top=50`) : Promise.resolve({value:[]}),
-      poName  ? bcFetch(`${poName}?$top=50`) : Promise.resolve({value:[]}),
-      itmName ? bcFetch(`${itmName}?$top=500`) : Promise.resolve({value:[]})
+      bcFetchDyn(`${soName}?$top=50`),
+      poName  ? bcFetchDyn(`${poName}?$top=50`)   : Promise.resolve({value:[]}),
+      itmName ? bcFetchDyn(`${itmName}?$top=500`)  : Promise.resolve({value:[]})
     ]);
     renderSO(results[0].value || []);
     renderPO(results[1].value || []);
