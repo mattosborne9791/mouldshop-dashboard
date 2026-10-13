@@ -319,13 +319,16 @@ async function onAuthenticated() {
   dbg.textContent = 'Checking BC connection…';
 
   try {
-    const r1 = await fetch('https://api.businesscentral.dynamics.com/v2.0/' + TENANT + '/Production/ODataV4/Companies', {
-      headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' }
+    // Fetch $metadata to get all entity set names
+    const r1 = await fetch(BC_BASE + '$metadata', {
+      headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/xml' }
     });
     const t1 = await r1.text();
-    dbg.textContent = 'Companies endpoint (' + r1.status + '): ' + t1.slice(0, 400);
+    // Extract EntitySet names from XML
+    const matches = [...t1.matchAll(/EntitySet[^>]+Name="([^"]+)"/g)].map(m => m[1]);
+    dbg.textContent = 'BC EntitySets (' + r1.status + '): ' + (matches.length ? matches.join(', ') : t1.slice(0, 600));
   } catch(e) {
-    dbg.textContent = 'Companies probe error: ' + e.message;
+    dbg.textContent = 'Metadata probe error: ' + e.message;
   }
 
   fetchAll();
