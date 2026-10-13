@@ -388,8 +388,8 @@ async function fetchAll() {
     const cd = JSON.parse(ct);
     const companies = cd.value || (Array.isArray(cd) ? cd : [cd]);
     if (!companies.length) { setStatus('grey', 'No companies returned'); return; }
-    // Use first company found
-    const match = companies[0];
+    // Pick Live Mouldshop specifically
+    const match = companies.find(c => (c.name||'').includes('Live Mouldshop')) || companies.find(c => (c.name||'').toLowerCase().includes('mouldshop')) || companies[0];
     companyId = match.id || match.Id || match.systemId || '';
     companyName = match.name || match.Name || match.displayName || 'Unknown';
     dbg.textContent = 'Companies: ' + JSON.stringify(companies.map(c => ({id:c.id||c.Id||c.systemId, name:c.name||c.Name||c.displayName}))) + ' → Using: ' + companyName;
@@ -406,9 +406,9 @@ async function fetchAll() {
   try {
     const bcFetchDyn = ep => fetch(COMPANY_BASE + ep, { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } }).then(r => { if (!r.ok) throw new Error('BC API ' + r.status + ' on ' + ep); return r.json(); });
     const results = await Promise.all([
-      bcFetchDyn(`${soName}?$top=50`),
-      poName  ? bcFetchDyn(`${poName}?$top=50`)   : Promise.resolve({value:[]}),
-      itmName ? bcFetchDyn(`${itmName}?$top=500`)  : Promise.resolve({value:[]})
+      bcFetchDyn(`${soName}?$select=number,sellToCustomerName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50`),
+      bcFetchDyn(`${poName}?$select=number,vendorName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50`),
+      bcFetchDyn(`${itmName}?$select=number,displayName,inventory,reorderPoint,blocked&$filter=blocked eq false&$top=500`)
     ]);
     renderSO(results[0].value || []);
     renderPO(results[1].value || []);
