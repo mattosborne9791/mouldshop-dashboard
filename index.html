@@ -230,7 +230,8 @@ tr:hover td { background: var(--bg); }
 <script>
 const TENANT  = 'f17044ae-2b66-4aa4-951b-38908b13d18b';
 const CLIENT  = '94cf8276-e615-4d6e-a825-fb71f5568b8b';
-const BC_BASE = "https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/Company(64831692-9eaf-ec11-8aa5-0022481b4e2d)/";
+const BC_ROOT = "https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/";
+const BC_CO   = "company=Live%20Mouldshop";
 const SCOPE   = 'https://api.businesscentral.dynamics.com/.default';
 // REDIRECT is set dynamically to wherever this file is hosted
 const REDIRECT = location.origin + location.pathname;
@@ -366,13 +367,12 @@ function statusTag(s) {
 async function fetchAll() {
   const dbg = document.getElementById('entity-debug');
   dbg.style.display = '';
-  dbg.textContent = 'Connecting to Live Mouldshop…';
+  dbg.textContent = 'Live Mouldshop · fetching data…';
   setStatus('grey', 'Refreshing…');
 
-  const COMPANY_BASE = 'https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/Company(64831692-9eaf-ec11-8aa5-0022481b4e2d)/';
-
-  const bcGet = async (ep) => {
-    const r = await fetch(COMPANY_BASE + ep, { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } });
+  const bcGet = async (entity, params) => {
+    const url = BC_ROOT + entity + '?' + BC_CO + (params ? '&' + params : '');
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } });
     if (r.status === 401) {
       accessToken = null;
       try { sessionStorage.removeItem('bc_token'); } catch {}
@@ -384,35 +384,24 @@ async function fetchAll() {
     }
     if (!r.ok) {
       const txt = await r.text().catch(() => '');
-      throw new Error('BC ' + r.status + ' on ' + ep.split('?')[0] + (txt ? ': ' + txt.slice(0,200) : ''));
+      throw new Error('BC ' + r.status + ' on ' + entity + (txt ? ': ' + txt.slice(0,150) : ''));
     }
     return r.json();
   };
 
   try {
-    dbg.textContent = 'Live Mouldshop · fetching data…';
-    // Company-scoped URL with PascalCase entity names
-    const CO_BASE = 'https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/Company(64831692-9eaf-ec11-8aa5-0022481b4e2d)/';
-    const coGet = async (ep) => {
-      const r = await fetch(CO_BASE + ep, { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } });
-      if (r.status === 401) { accessToken = null; try { sessionStorage.removeItem('bc_token'); } catch {} setStatus('grey', 'Session expired'); throw new Error('Token expired'); }
-      if (!r.ok) { const t = await r.text().catch(()=>''); throw new Error('BC ' + r.status + ' on ' + ep.split('?')[0] + ': ' + t.slice(0,120)); }
-      return r.json();
-    };
+    const [soRes, poRes, itmRes] = await Promise.all([
+      bcGet('SalesOrder', '$select=No,Sell_to_Customer_Name,Order_Date,Status&$orderby=Order_Date%20desc&$top=50'),
+      bcGet('purchaseDocuments', '$select=number,buyFromVendorName,orderDate,amountIncludingVat,status&$orderby=orderDate%20desc&$top=50'),
+      bcGet('CS_Items', '$select=No,Description&$top=500')
+    ]);
 
-    // Probe PascalCase entity names under company scope
-    const probes = {};
-    for (const name of ['SalesOrder','SalesOrders','PurchaseOrder','PurchaseOrders','Item','Items']) {
-      try { const r = await coGet(name + '?$top=1'); probes[name] = 'OK:' + (r.value||[]).length + (r.value&&r.value[0]?' fields:'+Object.keys(r.value[0]).slice(0,6).join(','):''); }
-      catch(e) { probes[name] = e.message.slice(0,50); }
-    }
-
-    renderSO([]);
-    renderPO([]);
-    renderItems([]);
-    document.getElementById('footer-ts').textContent = 'Probe complete';
-    dbg.textContent = Object.entries(probes).map(([k,v])=>k+':'+v).join(' | ');
-    setStatus('grey', 'Probe — see blue bar');
+    renderSO(soRes.value || []);
+    renderPO(poRes.value || []);
+    renderItems(itmRes.value || []);
+    document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
+    dbg.textContent = 'Live Mouldshop · ' + (soRes.value||[]).length + ' sales orders · ' + (poRes.value||[]).length + ' purchase orders · ' + (itmRes.value||[]).length + ' items';
+    setStatus('live', 'Live');
   } catch(e) {
     if (e.message !== 'Token expired') {
       dbg.textContent = 'Error: ' + e.message;
@@ -423,58 +412,52 @@ async function fetchAll() {
 }
 
 function renderSO(rows) {
-  const tot = rows.reduce((s,r) => s + Number(r.totalAmountIncludingTax||r.amount||0), 0);
   document.getElementById('kpi-so').textContent  = num(rows.length);
-  document.getElementById('kpi-sov').textContent = gbp(tot);
+  document.getElementById('kpi-sov').textContent = '—';
   document.getElementById('so-count').textContent = rows.length;
   const tb = document.getElementById('so-body');
   tb.innerHTML = rows.length ? rows.slice(0,20).map(r => `<tr>
-    <td class="mono">${r.number||'—'}</td>
-    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.sellToCustomerName||'—'}</td>
-    <td style="white-space:nowrap">${fmtd(r.orderDate)}</td>
-    <td style="text-align:right">${gbp(r.totalAmountIncludingTax||r.amount)}</td>
-    <td>${statusTag(r.status)}</td></tr>`).join('')
+    <td class="mono">${r.No||'—'}</td>
+    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.Sell_to_Customer_Name||'—'}</td>
+    <td style="white-space:nowrap">${fmtd(r.Order_Date)}</td>
+    <td style="text-align:right">—</td>
+    <td>${statusTag(r.Status)}</td></tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No open sales orders</td></tr>';
   const byCust = {};
-  rows.forEach(r => { const k=r.sellToCustomerName||'Unknown'; byCust[k]=(byCust[k]||0)+Number(r.totalAmountIncludingTax||r.amount||0); });
+  rows.forEach(r => { const k=r.Sell_to_Customer_Name||'Unknown'; byCust[k]=(byCust[k]||0)+1; });
   renderChart('cust-chart', byCust);
 }
 
 function renderPO(rows) {
-  const tot = rows.reduce((s,r) => s + Number(r.totalAmountIncludingTax||0), 0);
+  const tot = rows.reduce((s,r) => s + Number(r.amountIncludingVat||0), 0);
   document.getElementById('kpi-po').textContent  = num(rows.length);
   document.getElementById('kpi-pov').textContent = gbp(tot);
   document.getElementById('po-count').textContent = rows.length;
   const tb = document.getElementById('po-body');
   tb.innerHTML = rows.length ? rows.slice(0,20).map(r => `<tr>
     <td class="mono">${r.number||'—'}</td>
-    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.buyFromVendorName||r.vendorName||'—'}</td>
+    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.buyFromVendorName||'—'}</td>
     <td style="white-space:nowrap">${fmtd(r.orderDate)}</td>
-    <td style="text-align:right">${gbp(r.totalAmountIncludingTax)}</td>
+    <td style="text-align:right">${gbp(r.amountIncludingVat)}</td>
     <td>${statusTag(r.status)}</td></tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No open purchase orders</td></tr>';
   const byVend = {};
-  rows.forEach(r => { const k=r.buyFromVendorName||r.vendorName||'Unknown'; byVend[k]=(byVend[k]||0)+Number(r.totalAmountIncludingTax||0); });
+  rows.forEach(r => { const k=r.buyFromVendorName||'Unknown'; byVend[k]=(byVend[k]||0)+Number(r.amountIncludingVat||0); });
   renderChart('vend-chart', byVend);
 }
 
 function renderItems(rows) {
   document.getElementById('kpi-items').textContent = num(rows.length);
   document.getElementById('kpi-inv').textContent = '—';
-  const low = rows.filter(r => { const q=Number(r.inventory||0),rp=Number(r.reorderPoint||0); return q<=0||(rp>0&&q<=rp); })
-    .sort((a,b) => Number(a.inventory||0)-Number(b.inventory||0));
-  document.getElementById('ls-count').textContent = low.length;
+  // Show all items (no stock qty available from CS_Items)
+  document.getElementById('ls-count').textContent = rows.length;
   const tb = document.getElementById('ls-body');
-  tb.innerHTML = low.length ? low.slice(0,30).map(r => {
-    const q=Number(r.inventory||0), rp=Number(r.reorderPoint||0);
-    return `<tr>
-      <td class="mono">${r.number||'—'}</td>
-      <td>${r.displayName||'—'}</td>
-      <td>${(r.unitOfMeasure&&r.unitOfMeasure.code)||'—'}</td>
-      <td style="text-align:right;font-family:var(--mono)">${num(q)}</td>
-      <td style="text-align:right;font-family:var(--mono)">${rp>0?num(rp):'—'}</td>
-      <td><span class="tag ${q<=0?'tag-bad':'tag-warn'}">${q<=0?'Zero stock':'Low stock'}</span></td></tr>`;
-  }).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--fg3);padding:24px">All items above reorder point ✓</td></tr>';
+  tb.innerHTML = rows.length ? rows.slice(0,30).map(r => `<tr>
+    <td class="mono">${r.No||'—'}</td>
+    <td>${r.Description||'—'}</td>
+    <td>—</td><td style="text-align:right">—</td><td style="text-align:right">—</td>
+    <td><span class="tag tag-neu">active</span></td></tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:var(--fg3);padding:24px">No items found</td></tr>';
 }
 
 function renderChart(id, dataObj) {
