@@ -466,7 +466,8 @@ async function fetchAll() {
     document.getElementById('gauge-needle').style.transform = 'rotate(' + needleDeg + 'deg)';
 
     const isGreen = soVal >= GAUGE_THRESH + 1;
-    document.getElementById('meter-label').textContent = gbp(soVal) + ' of £30,000 (' + Math.round(valPct * 100) + '%)';
+    const targetPct = Math.round(soVal / (GAUGE_THRESH + 1) * 100);
+    document.getElementById('meter-label').textContent = gbp(soVal) + ' of £16,678 (' + targetPct + '%)';
     document.getElementById('meter-label').style.color = isGreen ? 'var(--good)' : 'var(--bad)';
 
     renderSO(soOrders, soLineTotals);
