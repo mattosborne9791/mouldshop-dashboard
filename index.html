@@ -658,7 +658,7 @@ function renderSO(rows, lineTotals) {
     <td style="white-space:nowrap">${fmtd(r.Order_Date)}</td>
     <td style="text-align:right">${lineTotals[r.No] != null ? gbp(lineTotals[r.No]) : "—"}</td>
     <td>${statusTag(r.Status)}</td></tr>`).join("")
-    : "<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No sales orders today</td></tr>";
+    : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No sales orders today</td></tr>';
 }
 function renderPO(rows) {
   document.getElementById("kpi-po").textContent  = num(rows.length);
@@ -670,7 +670,7 @@ function renderPO(rows) {
     <td style="white-space:nowrap">${fmtd(r.requestedReceiptDate)}</td>
     <td style="text-align:right">${gbp(r.amountIncludingVat)}</td>
     <td>${statusTag(r.status)}</td></tr>`).join("")
-    : "<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No open purchase orders</td></tr>";
+    : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No open purchase orders</td></tr>';
 }
 function renderReceipts(rows) {
   document.getElementById("kpi-rcpt").textContent = num(rows.length);
@@ -680,7 +680,7 @@ function renderReceipts(rows) {
     <td class="mono">${r.Item_No||"—"}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${num(r.Quantity)}</td>
     <td style="white-space:nowrap">${fmtd(r.Posting_Date)}</td></tr>`).join("")
-    : "<tr><td colspan="3" style="text-align:center;color:var(--fg3);padding:24px">No receipts posted today</td></tr>";
+    : '<tr><td colspan="3" style="text-align:center;color:var(--fg3);padding:24px">No receipts posted today</td></tr>';
 }
 function renderShipments(rows, lines) {
   document.getElementById("kpi-ship").textContent = num(rows.length);
