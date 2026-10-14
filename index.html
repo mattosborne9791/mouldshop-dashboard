@@ -203,16 +203,6 @@ tr:hover td { background: var(--bg); }
       </div>
     </div>
 
-    <div class="two-col">
-      <div>
-        <div class="section-head"><div class="section-title">Customers — Open Order Value</div></div>
-        <div class="chart-wrap" id="cust-chart"><div style="color:var(--fg3);font-size:13px;text-align:center;padding:20px">Loading…</div></div>
-      </div>
-      <div>
-        <div class="section-head"><div class="section-title">Vendors — Open PO Value</div></div>
-        <div class="chart-wrap" id="vend-chart"><div style="color:var(--fg3);font-size:13px;text-align:center;padding:20px">Loading…</div></div>
-      </div>
-    </div>
   </div>
   <div class="footer" id="footer-ts">Last updated: —</div>
 </div>
@@ -439,9 +429,6 @@ function renderSO(rows, lineTotals) {
     <td style="text-align:right">${lineTotals[r.No] != null ? gbp(lineTotals[r.No]) : '—'}</td>
     <td>${statusTag(r.Status)}</td></tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No sales orders today</td></tr>';
-  const byCust = {};
-  rows.forEach(r => { const k=r.Sell_to_Customer_Name||'Unknown'; byCust[k]=(byCust[k]||0)+(lineTotals[r.No]||0); });
-  renderChart('cust-chart', byCust);
 }
 
 function renderPO(rows) {
@@ -455,27 +442,9 @@ function renderPO(rows) {
     <td style="text-align:right">${gbp(r.amountIncludingVat)}</td>
     <td>${statusTag(r.status)}</td></tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No open purchase orders</td></tr>';
-  const byVend = {};
-  rows.forEach(r => { const k=r.buyFromVendorName||'Unknown'; byVend[k]=(byVend[k]||0)+Number(r.amountIncludingVat||0); });
-  renderChart('vend-chart', byVend);
 }
 
 
-function renderChart(id, dataObj) {
-  const el = document.getElementById(id);
-  const entries = Object.entries(dataObj).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  if (!entries.length) { el.innerHTML='<div style="color:var(--fg3);padding:12px;font-size:13px">No data</div>'; return; }
-  const max=entries[0][1], W=600, lblW=140, valWu=70, barAreaW=W-lblW-valWu-16, barH=26, gap=8, padT=8;
-  const totalH=entries.length*(barH+gap)-gap+padT*2;
-  const svg=entries.map(([label,val],i)=>{
-    const y=padT+i*(barH+gap), bw=Math.max(4,(max>0?val/max:0)*barAreaW);
-    const lbl=label.length>22?label.slice(0,21)+'…':label;
-    return `<text x="${lblW-8}" y="${y+barH/2+4.5}" text-anchor="end" font-size="11" fill="var(--fg2)" font-family="Inter,sans-serif">${lbl}</text>
-      <rect x="${lblW}" y="${y}" width="${bw}" height="${barH}" rx="4" fill="var(--accent)" opacity="0.85"/>
-      <text x="${lblW+bw+6}" y="${y+barH/2+4.5}" font-size="11" fill="var(--fg)" font-family="monospace">£${(val/1000).toFixed(1)}k</text>`;
-  }).join('');
-  el.innerHTML=`<svg viewBox="0 0 ${W} ${totalH}" style="overflow:visible">${svg}</svg>`;
-}
 
 init();
 </script>
