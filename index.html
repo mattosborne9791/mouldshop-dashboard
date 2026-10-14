@@ -425,19 +425,15 @@ async function fetchAll() {
       bcGet('Posted_Sales_Shipment_Excel', '$select=No,Sell_to_Customer_Name,Shipment_Date,Order_No&$filter=Shipment_Date%20eq%20' + today + '&$top=200'),
       bcGet('ItemLedgerEntries', '$select=Entry_No,Document_No,Posting_Date&$filter=Entry_Type%20eq%20%27Sale%27%20and%20Posting_Date%20eq%20' + today + '&$top=500').catch(() => ({value:[]})),
       (async () => {
-        const candidates = [
-          'custLedgerEntries','CustLedgerEntries','Cust_Ledger_Entries',
-          'CustomerLedgerEntries','Customer_Ledger_Entry','custLedgerEntry',
-          'CS_CustLedgerEntries','CS_CustomerLedgerEntries',
-          'DetailedCustLedgEntries','Detailed_Cust_Ledg_Entry',
-        ];
-        for (const e of candidates) {
-          try {
-            const r = await bcGet(e, '$top=1');
-            console.log('[DEBTOR] FOUND:', e, JSON.stringify(r).slice(0,400));
-            return r;
-          } catch(ex) { console.log('[DEBTOR] 404:', e); }
-        }
+        try {
+          const r = await fetch(BC_ROOT + '?' + BC_CO, {headers:{Authorization:'Bearer '+token}});
+          const txt = await r.text();
+          // Extract entity names from service document
+          const names = [...txt.matchAll(/"name":"([^"]+)"/g)].map(m=>m[1]);
+          const cust = names.filter(n => /cust|debt|ledger|aging|aged/i.test(n));
+          console.log('[DEBTOR] Available cust/ledger entities:', cust.join(', '));
+          console.log('[DEBTOR] All entities:', names.join(', '));
+        } catch(e) { console.log('[DEBTOR] service doc failed:', e.message); }
         return {value:[]};
       })(),
     ]);
