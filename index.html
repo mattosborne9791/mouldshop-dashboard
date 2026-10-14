@@ -112,6 +112,8 @@ body {
 }
 .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
 .kpi-row-top { grid-template-columns: repeat(5, 1fr); }
+.kpi-row-bottom { grid-template-columns: repeat(5, 1fr); }
+.kpi-row-bottom > .kpi:first-child { grid-column: 2; }
 .kpi {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 10px; padding: 18px 20px;
