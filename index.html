@@ -113,10 +113,6 @@ body {
 .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
 .kpi-row-top { grid-template-columns: repeat(5, 1fr); }
 .kpi-row-bottom { grid-template-columns: repeat(5, 1fr); }
-.kpi-row-bottom > .kpi:nth-child(1) { grid-column: 1; }
-.kpi-row-bottom > .kpi:nth-child(2) { grid-column: 2; }
-.kpi-row-bottom > .kpi:nth-child(3) { grid-column: 4; }
-.kpi-row-bottom > .kpi:nth-child(4) { grid-column: 5; }
 .kpi {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 10px; padding: 18px 20px;
@@ -222,6 +218,7 @@ tr:hover td { background: var(--bg); }
       <div class="kpi"><div class="kpi-label">Warehouse Shipments Today</div><div class="kpi-value" id="kpi-ship">—</div><div class="kpi-sub">by shipment count</div></div>
       <div class="kpi"><div class="kpi-label">Shipment Lines Today</div><div class="kpi-value" id="kpi-shiplines">—</div><div class="kpi-sub">lines posted today</div></div>
       <div class="kpi"><div class="kpi-label">Overdue Debtors</div><div class="kpi-value" id="kpi-overdue">—</div><div class="kpi-sub">GBP, overdue balance</div></div>
+      <div class="kpi"><div class="kpi-label">Shipped Not Invoiced</div><div class="kpi-value" id="kpi-sni">—</div><div class="kpi-sub">today's shipments, ex-VAT</div></div>
     </div>
 
     <div class="two-col">
@@ -442,6 +439,18 @@ async function fetchAll() {
       shipLinesRes = {value: allLines};
     }
 
+    // Fetch ex-VAT line amounts for today's shipped orders (shipped-not-invoiced value)
+    const shipOrderNos = [...new Set((shipRes.value || []).map(r => r.Order_No).filter(Boolean))];
+    let sniTotal = 0;
+    if (shipOrderNos.length > 0) {
+      try {
+        const sniResults = await Promise.all(shipOrderNos.map(n =>
+          bcGet('salesDocumentLines', '$filter=documentNumber%20eq%20%27' + encodeURIComponent(n) + '%27&$select=documentNumber,amount&$top=200').catch(() => ({value:[]}))
+        ));
+        sniResults.forEach(res => (res.value || []).forEach(l => { sniTotal += Number(l.amount || 0); }));
+      } catch(e) { console.warn('SNI fetch failed:', e.message); }
+    }
+
     const soOrders = soRes.value || [];
 
     // Fetch sales lines per order in parallel to get ex-VAT totals
@@ -514,6 +523,8 @@ async function fetchAll() {
     renderReceipts(rcptRes.value || []);
     renderShipments(shipRes.value || [], shipLinesRes.value || []);
     renderOverdue(debtorRes.value || []);
+    const sniEl = document.getElementById('kpi-sni');
+    if (sniEl) { sniEl.textContent = gbp(sniTotal); }
     document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
     dbg.textContent = 'Live Mouldshop · ' + soOrders.length + ' sales orders · ' + (poRes.value||[]).length + ' purchase orders';
     setStatus('live', 'Live');
