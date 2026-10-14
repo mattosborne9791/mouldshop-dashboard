@@ -421,7 +421,7 @@ async function fetchAll() {
       bcGet('G_LEntries', '$select=G_L_Account_No,Amount&$filter=(G_L_Account_No%20eq%20%274000%27%20or%20G_L_Account_No%20eq%20%274009%27)%20and%20Posting_Date%20ge%20' + monthStart + '%20and%20Posting_Date%20le%20' + today + '&$top=2000'),
       bcGet('ItemLedgerEntries', '$select=Entry_No,Item_No,Quantity,Posting_Date&$filter=Entry_Type%20eq%20%27Purchase%27%20and%20Posting_Date%20eq%20' + today + '&$top=200'),
       bcGet('Posted_Sales_Shipment_Excel', '$select=No,Sell_to_Customer_Name,Shipment_Date,Order_No&$filter=Shipment_Date%20eq%20' + today + '&$top=200'),
-      bcGet('ItemLedgerEntries', '$select=Entry_No,Document_No,Posting_Date&$filter=Entry_Type%20eq%20'Sale'%20and%20Posting_Date%20eq%20' + today + '&$top=500').catch(() => ({value:[]})),
+      bcGet('ItemLedgerEntries', '$select=Entry_No,Document_No,Posting_Date&$filter=Entry_Type%20eq%20%27Sale%27%20and%20Posting_Date%20eq%20' + today + '&$top=500').catch(() => ({value:[]})),
     ]);
 
     const soOrders = soRes.value || [];
