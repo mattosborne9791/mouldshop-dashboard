@@ -439,17 +439,26 @@ async function fetchAll() {
       shipLinesRes = {value: allLines};
     }
 
-    // Fetch ex-VAT line amounts for today's shipped orders (shipped-not-invoiced value)
-    const shipOrderNos = [...new Set((shipRes.value || []).map(r => r.Order_No).filter(Boolean))];
+    // Shipped Not Invoiced — sum native BC field across all open sales orders
     let sniTotal = 0;
-    if (shipOrderNos.length > 0) {
-      try {
-        const sniResults = await Promise.all(shipOrderNos.map(n =>
-          bcGet('salesDocumentLines', '$filter=documentNumber%20eq%20%27' + encodeURIComponent(n) + '%27&$select=documentNumber,amount&$top=200').catch(() => ({value:[]}))
-        ));
-        sniResults.forEach(res => (res.value || []).forEach(l => { sniTotal += Number(l.amount || 0); }));
-      } catch(e) { console.warn('SNI fetch failed:', e.message); }
-    }
+    try {
+      const sniProbe = await bcGet('SalesOrder', '$top=1').catch(() => ({value:[]}));
+      const sniFields = Object.keys((sniProbe.value||[{}])[0]);
+      console.log('[SNI] SalesOrder fields:', sniFields.join(','));
+      const sniField = sniFields.find(f => /ship.*inv|inv.*ship/i.test(f));
+      console.log('[SNI] matched field:', sniField);
+      if (sniField) {
+        let skip = 0;
+        while (true) {
+          const page = await bcGet('SalesOrder', '$select=' + sniField + '&$top=200&$skip=' + skip).catch(() => ({value:[]}));
+          const rows = page.value || [];
+          rows.forEach(r => { sniTotal += Number(r[sniField] || 0); });
+          if (rows.length < 200) break;
+          skip += 200;
+          if (skip > 5000) break;
+        }
+      }
+    } catch(e) { console.warn('SNI fetch failed:', e.message); }
 
     const soOrders = soRes.value || [];
 
