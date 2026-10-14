@@ -426,14 +426,17 @@ async function fetchAll() {
       bcGet('ItemLedgerEntries', '$select=Entry_No,Document_No,Posting_Date&$filter=Entry_Type%20eq%20%27Sale%27%20and%20Posting_Date%20eq%20' + today + '&$top=500').catch(() => ({value:[]})),
       (async () => {
         try {
-          const r = await fetch(BC_ROOT + '?' + BC_CO, {headers:{Authorization:'Bearer '+token}});
-          const txt = await r.text();
-          // Extract entity names from service document
+          const r = await bcGet('', '');
+          console.log('[DEBTOR] service doc ERROR - should not succeed');
+        } catch(e) {}
+        try {
+          const resp = await fetch(BC_ROOT + '?' + BC_CO, {headers:{Authorization:'Bearer '+accessToken}});
+          const txt = await resp.text();
           const names = [...txt.matchAll(/"name":"([^"]+)"/g)].map(m=>m[1]);
           const cust = names.filter(n => /cust|debt|ledger|aging|aged/i.test(n));
-          console.log('[DEBTOR] Available cust/ledger entities:', cust.join(', '));
-          console.log('[DEBTOR] All entities:', names.join(', '));
-        } catch(e) { console.log('[DEBTOR] service doc failed:', e.message); }
+          console.log('[DEBTOR] cust/debt entities:', cust.join(', '));
+          console.log('[DEBTOR] all:', names.join(', '));
+        } catch(e) { console.log('[DEBTOR] failed:', e.message); }
         return {value:[]};
       })(),
     ]);
