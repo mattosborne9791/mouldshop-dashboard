@@ -184,8 +184,6 @@ tr:hover td { background: var(--bg); }
       <div class="kpi"><div class="kpi-label">Sales Order Value</div><div class="kpi-value" id="kpi-sov">—</div><div class="kpi-sub">GBP, excl. VAT</div></div>
       <div class="kpi"><div class="kpi-label">POs Due Today</div><div class="kpi-value" id="kpi-po">—</div><div class="kpi-sub">by document count</div></div>
       <div class="kpi"><div class="kpi-label">Purchase Order Value</div><div class="kpi-value" id="kpi-pov">—</div><div class="kpi-sub">GBP, excl. VAT</div></div>
-      <div class="kpi"><div class="kpi-label">Inventory Items</div><div class="kpi-value" id="kpi-items">—</div><div class="kpi-sub">active stock lines</div></div>
-      <div class="kpi"><div class="kpi-label">Inventory Value</div><div class="kpi-value" id="kpi-inv">—</div><div class="kpi-sub">GBP at cost</div></div>
     </div>
 
     <div class="two-col">
@@ -203,14 +201,6 @@ tr:hover td { background: var(--bg); }
           <tbody id="po-body"><tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">Loading…</td></tr></tbody>
         </table></div>
       </div>
-    </div>
-
-    <div>
-      <div class="section-head"><div class="section-title">Low / Zero Stock Items</div><span class="badge" id="ls-count">—</span></div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Item No.</th><th>Description</th><th>Unit</th><th>Qty on Hand</th><th>Reorder Pt.</th><th>Status</th></tr></thead>
-        <tbody id="ls-body"><tr><td colspan="6" style="text-align:center;color:var(--fg3);padding:24px">Loading…</td></tr></tbody>
-      </table></div>
     </div>
 
     <div class="two-col">
@@ -391,10 +381,9 @@ async function fetchAll() {
 
   try {
     const today = new Date().toISOString().slice(0,10);
-    const [soRes, poRes, itmRes] = await Promise.all([
+    const [soRes, poRes] = await Promise.all([
       bcGet('SalesOrder', '$select=No,Sell_to_Customer_Name,Order_Date,Status&$filter=Order_Date%20eq%20' + today + '&$orderby=Order_Date%20desc&$top=50'),
       bcGet('purchaseDocuments', '$select=number,buyFromVendorName,orderDate,requestedReceiptDate,amountIncludingVat,status&$filter=requestedReceiptDate%20eq%20' + today + '&$orderby=requestedReceiptDate%20desc&$top=50'),
-      bcGet('CS_Items', '$select=No,Description&$top=500')
     ]);
 
     const soOrders = soRes.value || [];
@@ -418,9 +407,8 @@ async function fetchAll() {
 
     renderSO(soOrders, soLineTotals);
     renderPO(poRes.value || []);
-    renderItems(itmRes.value || []);
     document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
-    dbg.textContent = 'Live Mouldshop · ' + soOrders.length + ' sales orders · ' + (poRes.value||[]).length + ' purchase orders · ' + (itmRes.value||[]).length + ' items';
+    dbg.textContent = 'Live Mouldshop · ' + soOrders.length + ' sales orders · ' + (poRes.value||[]).length + ' purchase orders';
     setStatus('live', 'Live');
   } catch(e) {
     if (e.message !== 'Token expired') {
@@ -468,19 +456,6 @@ function renderPO(rows) {
   renderChart('vend-chart', byVend);
 }
 
-function renderItems(rows) {
-  document.getElementById('kpi-items').textContent = num(rows.length);
-  document.getElementById('kpi-inv').textContent = '—';
-  // Show all items (no stock qty available from CS_Items)
-  document.getElementById('ls-count').textContent = rows.length;
-  const tb = document.getElementById('ls-body');
-  tb.innerHTML = rows.length ? rows.slice(0,30).map(r => `<tr>
-    <td class="mono">${r.No||'—'}</td>
-    <td>${r.Description||'—'}</td>
-    <td>—</td><td style="text-align:right">—</td><td style="text-align:right">—</td>
-    <td><span class="tag tag-neu">active</span></td></tr>`).join('')
-    : '<tr><td colspan="6" style="text-align:center;color:var(--fg3);padding:24px">No items found</td></tr>';
-}
 
 function renderChart(id, dataObj) {
   const el = document.getElementById(id);
