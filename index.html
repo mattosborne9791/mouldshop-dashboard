@@ -420,37 +420,7 @@ async function fetchAll() {
       bcGet('G_LEntries', '$select=G_L_Account_No,Amount&$filter=(G_L_Account_No%20eq%20%274000%27%20or%20G_L_Account_No%20eq%20%274009%27)%20and%20Posting_Date%20ge%20' + monthStart + '%20and%20Posting_Date%20le%20' + today + '&$top=2000'),
       bcGet('ItemLedgerEntries', '$select=Entry_No,Item_No,Quantity,Posting_Date&$filter=Entry_Type%20eq%20%27Purchase%27%20and%20Posting_Date%20eq%20' + today + '&$top=200'),
       bcGet('Posted_Sales_Shipment_Excel', '$select=No,Sell_to_Customer_Name,Shipment_Date,Order_No&$filter=Shipment_Date%20eq%20' + today + '&$top=200'),
-      (async () => {
-        const candidates = [
-          'Posted_Sales_Shipment_Line_Excel',
-          'Posted_Sales_Shipment_Lines_Excel',
-          'SalesShipmentLine_Excel',
-          'SalesShipmentLines_Excel',
-          'CS_PostedSalesShipmentLine',
-          'CS_Posted_Sales_Shipment_Line',
-          'PostedSalesShipmentLine',
-          'postedSalesShipmentLine',
-          'SalesShipmentLine',
-          'salesShipmentLines',
-          'Posted_Sales_Shipment_Lines',
-          'PostedSalesShipmentLines',
-        ];
-        for (const e of candidates) {
-          try {
-            const r = await bcGet(e, '$top=1');
-            console.log('[SHIP-LINES] FOUND:', e, JSON.stringify(r).slice(0,200));
-            return r;
-          } catch(ex) { console.log('[SHIP-LINES] 404:', e); }
-        }
-        console.log('[SHIP-LINES] all 404 - trying metadata');
-        try {
-          const meta = await fetch(BC_ROOT + '$metadata?' + BC_CO, {headers:{Authorization:'Bearer '+token}});
-          const txt = await meta.text();
-          const matches = [...txt.matchAll(/EntityType Name="([^"]*[Ss]hipment[Ll]ine[^"]*)"/g)].map(m=>m[1]);
-          console.log('[SHIP-LINES] metadata matches:', matches.join(', '));
-        } catch(e) {}
-        return {value:[]};
-      })(),
+      bcGet('ItemLedgerEntries', '$select=Entry_No,Document_No,Posting_Date&$filter=Entry_Type%20eq%20'Sale'%20and%20Posting_Date%20eq%20' + today + '&$top=500').catch(() => ({value:[]})),
     ]);
 
     const soOrders = soRes.value || [];
