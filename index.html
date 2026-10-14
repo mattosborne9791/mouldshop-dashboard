@@ -390,17 +390,35 @@ async function fetchAll() {
   };
 
   try {
+    const today = new Date().toISOString().slice(0,10);
     const [soRes, poRes, itmRes] = await Promise.all([
-      bcGet('SalesOrder', '$select=No,Sell_to_Customer_Name,Order_Date,Status&$filter=Order_Date%20eq%20' + new Date().toISOString().slice(0,10) + '&$orderby=Order_Date%20desc&$top=50'),
-      bcGet('purchaseDocuments', '$select=number,buyFromVendorName,orderDate,requestedReceiptDate,amountIncludingVat,status&$filter=requestedReceiptDate%20eq%20' + new Date().toISOString().slice(0,10) + '&$orderby=requestedReceiptDate%20desc&$top=50'),
+      bcGet('SalesOrder', '$select=No,Sell_to_Customer_Name,Order_Date,Status&$filter=Order_Date%20eq%20' + today + '&$orderby=Order_Date%20desc&$top=50'),
+      bcGet('purchaseDocuments', '$select=number,buyFromVendorName,orderDate,requestedReceiptDate,amountIncludingVat,status&$filter=requestedReceiptDate%20eq%20' + today + '&$orderby=requestedReceiptDate%20desc&$top=50'),
       bcGet('CS_Items', '$select=No,Description&$top=500')
     ]);
 
-    renderSO(soRes.value || []);
+    const soOrders = soRes.value || [];
+
+    // Fetch sales lines for today's orders to get ex-VAT totals
+    let soLineTotals = {};
+    if (soOrders.length > 0) {
+      const orderNums = soOrders.map(r => "'" + r.No + "'").join(',');
+      const filter = '$filter=documentNumber%20in%20(' + encodeURIComponent(orderNums) + ')&$select=documentNumber,amount';
+      try {
+        const linesRes = await bcGet('salesDocumentLines', filter + '&$top=500');
+        (linesRes.value || []).forEach(l => {
+          soLineTotals[l.documentNumber] = (soLineTotals[l.documentNumber] || 0) + Number(l.amount || 0);
+        });
+      } catch(le) {
+        console.warn('Lines fetch failed:', le.message);
+      }
+    }
+
+    renderSO(soOrders, soLineTotals);
     renderPO(poRes.value || []);
     renderItems(itmRes.value || []);
     document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
-    dbg.textContent = 'Live Mouldshop · ' + (soRes.value||[]).length + ' sales orders · ' + (poRes.value||[]).length + ' purchase orders · ' + (itmRes.value||[]).length + ' items';
+    dbg.textContent = 'Live Mouldshop · ' + soOrders.length + ' sales orders · ' + (poRes.value||[]).length + ' purchase orders · ' + (itmRes.value||[]).length + ' items';
     setStatus('live', 'Live');
   } catch(e) {
     if (e.message !== 'Token expired') {
@@ -411,20 +429,22 @@ async function fetchAll() {
   }
 }
 
-function renderSO(rows) {
+function renderSO(rows, lineTotals) {
+  lineTotals = lineTotals || {};
+  const totalVal = Object.values(lineTotals).reduce((s,v) => s+v, 0);
   document.getElementById('kpi-so').textContent  = num(rows.length);
-  document.getElementById('kpi-sov').textContent = '—';
+  document.getElementById('kpi-sov').textContent = totalVal > 0 ? gbp(totalVal) : '—';
   document.getElementById('so-count').textContent = rows.length;
   const tb = document.getElementById('so-body');
   tb.innerHTML = rows.length ? rows.slice(0,20).map(r => `<tr>
     <td class="mono">${r.No||'—'}</td>
     <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.Sell_to_Customer_Name||'—'}</td>
     <td style="white-space:nowrap">${fmtd(r.Order_Date)}</td>
-    <td style="text-align:right">—</td>
+    <td style="text-align:right">${lineTotals[r.No] != null ? gbp(lineTotals[r.No]) : '—'}</td>
     <td>${statusTag(r.Status)}</td></tr>`).join('')
-    : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No open sales orders</td></tr>';
+    : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No sales orders today</td></tr>';
   const byCust = {};
-  rows.forEach(r => { const k=r.Sell_to_Customer_Name||'Unknown'; byCust[k]=(byCust[k]||0)+1; });
+  rows.forEach(r => { const k=r.Sell_to_Customer_Name||'Unknown'; byCust[k]=(byCust[k]||0)+(lineTotals[r.No]||0); });
   renderChart('cust-chart', byCust);
 }
 
