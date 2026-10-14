@@ -424,20 +424,31 @@ async function fetchAll() {
         const candidates = [
           'Posted_Sales_Shipment_Line_Excel',
           'Posted_Sales_Shipment_Lines_Excel',
-          'PostedSalesShipmentLineExcel',
           'SalesShipmentLine_Excel',
-          'CS_PostedSalesShipmentLines',
-          'CS_Posted_Sales_Shipment_Lines',
+          'SalesShipmentLines_Excel',
+          'CS_PostedSalesShipmentLine',
+          'CS_Posted_Sales_Shipment_Line',
+          'PostedSalesShipmentLine',
+          'postedSalesShipmentLine',
+          'SalesShipmentLine',
+          'salesShipmentLines',
+          'Posted_Sales_Shipment_Lines',
+          'PostedSalesShipmentLines',
         ];
         for (const e of candidates) {
           try {
             const r = await bcGet(e, '$top=1');
-            console.log('[SHIP-LINES] found entity:', e, r);
-            const f = (r.value||[]).length > 0 ? Object.keys(r.value[0]) : [];
-            console.log('[SHIP-LINES] fields:', f.join(', '));
-            return {value: r.value, _entity: e};
+            console.log('[SHIP-LINES] FOUND:', e, JSON.stringify(r).slice(0,200));
+            return r;
           } catch(ex) { console.log('[SHIP-LINES] 404:', e); }
         }
+        console.log('[SHIP-LINES] all 404 - trying metadata');
+        try {
+          const meta = await fetch(BC_ROOT + '$metadata?' + BC_CO, {headers:{Authorization:'Bearer '+token}});
+          const txt = await meta.text();
+          const matches = [...txt.matchAll(/EntityType Name="([^"]*[Ss]hipment[Ll]ine[^"]*)"/g)].map(m=>m[1]);
+          console.log('[SHIP-LINES] metadata matches:', matches.join(', '));
+        } catch(e) {}
         return {value:[]};
       })(),
     ]);
