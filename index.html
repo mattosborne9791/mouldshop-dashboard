@@ -189,6 +189,8 @@ tr:hover td { background: var(--bg); }
             <path d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="var(--border)" stroke-width="18" stroke-linecap="butt"/>
             <path id="gauge-red" d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="#dc2626" stroke-width="18" stroke-linecap="butt"
               stroke-dasharray="0 283" style="transition:stroke-dasharray .7s"/>
+            <path id="gauge-green-bg" d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="#16a34a" stroke-width="18" stroke-linecap="butt"
+              stroke-dasharray="0 283" stroke-dashoffset="0"/>
             <path id="gauge-green" d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="#16a34a" stroke-width="18" stroke-linecap="butt"
               stroke-dasharray="0 283" stroke-dashoffset="0" style="transition:all .7s"/>
             <!-- Threshold tick at 55.59% -->
@@ -436,6 +438,12 @@ async function fetchAll() {
     // Red arc: always fills 0 → thresh (55.59% of arc)
     const redLen = threshPct * ARC_LEN;
     document.getElementById('gauge-red').setAttribute('stroke-dasharray', redLen + ' ' + (ARC_LEN - redLen));
+
+    // Permanent green background: thresh → max
+    const greenBgLen = (1 - threshPct) * ARC_LEN;
+    document.getElementById('gauge-green-bg').setAttribute('stroke-dasharray', greenBgLen + ' ' + (ARC_LEN - greenBgLen));
+    document.getElementById('gauge-green-bg').setAttribute('stroke-dashoffset', -(threshPct * ARC_LEN));
+    document.getElementById('gauge-green-bg').setAttribute('stroke', '#bbf7d0');
 
     // Green arc: fills thresh → current value (if above thresh)
     const greenStart = threshPct * ARC_LEN;
