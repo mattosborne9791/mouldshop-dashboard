@@ -199,7 +199,7 @@ tr:hover td { background: var(--bg); }
       <div>
         <div class="section-head"><div class="section-title">Purchase Orders — Due Today</div><span class="badge" id="po-count">—</span></div>
         <div class="table-wrap"><table>
-          <thead><tr><th>Order No.</th><th>Vendor</th><th>Exp. Receipt</th><th>Amount £</th><th>Status</th></tr></thead>
+          <thead><tr><th>Order No.</th><th>Vendor</th><th>Req. Receipt</th><th>Amount £</th><th>Status</th></tr></thead>
           <tbody id="po-body"><tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">Loading…</td></tr></tbody>
         </table></div>
       </div>
@@ -392,7 +392,7 @@ async function fetchAll() {
   try {
     const [soRes, poRes, itmRes] = await Promise.all([
       bcGet('SalesOrder', '$select=No,Sell_to_Customer_Name,Order_Date,Status&$filter=Order_Date%20eq%20' + new Date().toISOString().slice(0,10) + '&$orderby=Order_Date%20desc&$top=50'),
-      bcGet('purchaseDocuments', '$select=number,buyFromVendorName,orderDate,expectedReceiptDate,amountIncludingVat,status&$filter=expectedReceiptDate%20eq%20' + new Date().toISOString().slice(0,10) + '&$orderby=expectedReceiptDate%20desc&$top=50'),
+      bcGet('purchaseDocuments', '$select=number,buyFromVendorName,orderDate,requestedReceiptDate,amountIncludingVat,status&$filter=requestedReceiptDate%20eq%20' + new Date().toISOString().slice(0,10) + '&$orderby=requestedReceiptDate%20desc&$top=50'),
       bcGet('CS_Items', '$select=No,Description&$top=500')
     ]);
 
@@ -437,7 +437,7 @@ function renderPO(rows) {
   tb.innerHTML = rows.length ? rows.slice(0,20).map(r => `<tr>
     <td class="mono">${r.number||'—'}</td>
     <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.buyFromVendorName||'—'}</td>
-    <td style="white-space:nowrap">${fmtd(r.expectedReceiptDate)}</td>
+    <td style="white-space:nowrap">${fmtd(r.requestedReceiptDate)}</td>
     <td style="text-align:right">${gbp(r.amountIncludingVat)}</td>
     <td>${statusTag(r.status)}</td></tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No open purchase orders</td></tr>';
