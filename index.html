@@ -391,46 +391,25 @@ async function fetchAll() {
 
   try {
     dbg.textContent = 'Live Mouldshop · fetching data…';
-    const soRes = await bcGet('salesOrder?$top=3');
-    const soFields = soRes.value && soRes.value[0] ? Object.keys(soRes.value[0]).join(', ') : 'empty';
-    renderSO(soRes.value || []);
-
-    // Probe item entity name
-    let itmRows = [], itmFields = 'not found', itmEntity = '';
-    for (const name of ['item', 'items', 'Item', 'Items']) {
+    // Probe all entity names
+    const probeResults = [];
+    const probeNames = ['salesOrder','SalesOrder','salesOrders','SalesOrders','sale_order',
+                        'purchaseOrder','PurchaseOrder','purchaseOrders',
+                        'item','Item','items','Items'];
+    for (const name of probeNames) {
       try {
-        const r = await bcGet(name + '?$top=5');
-        itmRows = r.value || [];
-        itmFields = itmRows[0] ? Object.keys(itmRows[0]).join(', ') : 'empty';
-        itmEntity = name;
-        break;
-      } catch(e) { itmFields = name + ':' + e.message.slice(0,40); }
-    }
-    renderItems(itmRows);
-
-    // Fetch PO separately — field name varies by BC version
-    let poRows = [];
-    try {
-      const poRes = await bcGet('purchaseOrder?$select=number,buyFromVendorName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50');
-      poRows = poRes.value || [];
-    } catch(pe) {
-      try {
-        const poRes2 = await bcGet('purchaseOrder?$select=number,vendorName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50');
-        poRows = poRes2.value || [];
-      } catch(pe2) {
-        try {
-          const poRes3 = await bcGet('purchaseOrder?$top=5');
-          poRows = poRes3.value || [];
-        } catch(pe3) {
-          dbg.textContent += ' | PO error: ' + pe3.message;
-        }
+        const r = await bcGet(name + '?$top=1');
+        probeResults.push(name + ':OK(' + (r.value||[]).length + ')');
+      } catch(e) {
+        probeResults.push(name + ':' + e.message.slice(7,12));
       }
     }
-    renderPO(poRows);
-
-    document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
-    dbg.textContent = 'SO fields: ' + soFields + ' | item entity=' + itmEntity + ' fields: ' + itmFields;
-    setStatus('live', 'Live');
+    renderSO([]);
+    renderPO([]);
+    renderItems([]);
+    document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB');
+    dbg.textContent = probeResults.join(' | ');
+    setStatus('grey', 'Probe complete — see blue bar');
   } catch(e) {
     if (e.message !== 'Token expired') {
       dbg.textContent = 'Error: ' + e.message;
