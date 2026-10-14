@@ -276,7 +276,29 @@ tr:hover td { background: var(--surface2); }
       </div>
     </div>
 
-    <!-- Row 3: Financial -->
+    <!-- Row 3: Alerts -->
+    <div class="row-group">
+      <div class="row-label">Alerts</div>
+      <div class="kpi-row-ops">
+        <div class="kpi kpi-accent-bad">
+          <div class="kpi-label">Late Shipments</div>
+          <div class="kpi-value" id="kpi-late" style="color:var(--bad)">—</div>
+          <div class="kpi-sub">orders past promised date, unshipped</div>
+        </div>
+        <div class="kpi kpi-accent-warn">
+          <div class="kpi-label">Overdue Supplier POs</div>
+          <div class="kpi-value" id="kpi-po-overdue" style="color:var(--warn)">—</div>
+          <div class="kpi-sub">past requested receipt date</div>
+        </div>
+        <div class="kpi kpi-accent-warn">
+          <div class="kpi-label">Due to Ship Today</div>
+          <div class="kpi-value" id="kpi-due-ship" style="color:var(--warn)">—</div>
+          <div class="kpi-sub">orders promised today, not yet shipped</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 4: Financial -->
     <div class="row-group">
       <div class="row-label">Financial Position</div>
       <div class="kpi-row-fin">
@@ -488,6 +510,20 @@ async function fetchAll() {
       bcGet("Posted_Sales_Shipment_Excel", "$select=No,Sell_to_Customer_Name,Shipment_Date,Order_No&$filter=Shipment_Date%20eq%20" + today + "&$top=200"),
       bcGet("Cust_LedgerEntries", "$select=Remaining_Amount,Open,Due_Date&$filter=Open%20eq%20true%20and%20Due_Date%20lt%20" + today + "&$top=2000").catch(() => ({value:[]})),
     ]);
+
+    // Alert KPI fetches (parallel)
+    const [lateRes, poOverdueRes, dueShipRes] = await Promise.all([
+      bcGet("SalesOrder", "$select=No,Shipment_Date,Late_Order_Shipping&$filter=Late_Order_Shipping%20eq%20true&$top=200").catch(() => ({value:[]})),
+      bcGet("purchaseDocuments", "$select=number,requestedReceiptDate,status&$filter=requestedReceiptDate%20lt%20" + today + "%20and%20(status%20eq%20%27Open%27%20or%20status%20eq%20%27Released%27)&$top=200").catch(() => ({value:[]})),
+      bcGet("SalesOrder", "$select=No,Shipment_Date,Completely_Shipped&$filter=Shipment_Date%20eq%20" + today + "%20and%20Completely_Shipped%20eq%20false&$top=200").catch(() => ({value:[]})),
+    ]);
+
+    const lateEl = document.getElementById("kpi-late");
+    if (lateEl) { lateEl.textContent = num((lateRes.value || []).length); }
+    const poOverdueEl = document.getElementById("kpi-po-overdue");
+    if (poOverdueEl) { poOverdueEl.textContent = num((poOverdueRes.value || []).length); }
+    const dueShipEl = document.getElementById("kpi-due-ship");
+    if (dueShipEl) { dueShipEl.textContent = num((dueShipRes.value || []).length); }
 
     const todayShipNos = (shipRes.value || []).map(r => r.No);
     let shipLinesRes = {value:[]};
