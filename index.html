@@ -391,28 +391,28 @@ async function fetchAll() {
 
   try {
     dbg.textContent = 'Live Mouldshop · fetching data…';
-    // Root-level OData with company filter
-    const ROOT_BASE = 'https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/';
-    const COMPANY_ID = '64831692-9eaf-ec11-8aa5-0022481b4e2d';
-    const rootGet = async (ep) => {
-      const r = await fetch(ROOT_BASE + ep, { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } });
+    // Company-scoped URL with PascalCase entity names
+    const CO_BASE = 'https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/Company(64831692-9eaf-ec11-8aa5-0022481b4e2d)/';
+    const coGet = async (ep) => {
+      const r = await fetch(CO_BASE + ep, { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/json' } });
       if (r.status === 401) { accessToken = null; try { sessionStorage.removeItem('bc_token'); } catch {} setStatus('grey', 'Session expired'); throw new Error('Token expired'); }
-      if (!r.ok) { const t = await r.text().catch(()=>''); throw new Error('BC ' + r.status + ' on ' + ep.split('?')[0] + (t ? ': ' + t.slice(0,150) : '')); }
+      if (!r.ok) { const t = await r.text().catch(()=>''); throw new Error('BC ' + r.status + ' on ' + ep.split('?')[0] + ': ' + t.slice(0,120)); }
       return r.json();
     };
 
-    // Fetch one raw SO to discover field names
-    const soRaw = await rootGet('SalesOrder?$top=1');
-    const soFields = soRaw.value && soRaw.value[0] ? Object.keys(soRaw.value[0]) : [];
-    // Find the company-related field
-    const companyField = soFields.find(f => f.toLowerCase().includes('company')) || 'NONE';
+    // Probe PascalCase entity names under company scope
+    const probes = {};
+    for (const name of ['SalesOrder','SalesOrders','PurchaseOrder','PurchaseOrders','Item','Items']) {
+      try { const r = await coGet(name + '?$top=1'); probes[name] = 'OK:' + (r.value||[]).length + (r.value&&r.value[0]?' fields:'+Object.keys(r.value[0]).slice(0,6).join(','):''); }
+      catch(e) { probes[name] = e.message.slice(0,50); }
+    }
 
     renderSO([]);
     renderPO([]);
     renderItems([]);
-    document.getElementById('footer-ts').textContent = 'Raw SO fields found';
-    dbg.textContent = 'SO fields: ' + soFields.join(', ') + ' | Company field: ' + companyField;
-    setStatus('grey', 'Field discovery — see blue bar');
+    document.getElementById('footer-ts').textContent = 'Probe complete';
+    dbg.textContent = Object.entries(probes).map(([k,v])=>k+':'+v).join(' | ');
+    setStatus('grey', 'Probe — see blue bar');
   } catch(e) {
     if (e.message !== 'Token expired') {
       dbg.textContent = 'Error: ' + e.message;
