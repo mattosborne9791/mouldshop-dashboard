@@ -391,25 +391,22 @@ async function fetchAll() {
 
   try {
     dbg.textContent = 'Live Mouldshop · fetching data…';
-    // Probe all entity names
-    const probeResults = [];
-    const probeNames = ['salesOrder','SalesOrder','salesOrders','SalesOrders','sale_order',
-                        'purchaseOrder','PurchaseOrder','purchaseOrders',
-                        'item','Item','items','Items'];
-    for (const name of probeNames) {
-      try {
-        const r = await bcGet(name + '?$top=1');
-        probeResults.push(name + ':OK(' + (r.value||[]).length + ')');
-      } catch(e) {
-        probeResults.push(name + ':' + e.message.slice(7,12));
-      }
-    }
+    // Fetch metadata to discover real entity names
+    const COMPANY_BASE = 'https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/Company(64831692-9eaf-ec11-8aa5-0022481b4e2d)/';
+    const metaR = await fetch(COMPANY_BASE + '$metadata', { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/xml' } });
+    const metaTxt = await metaR.text();
+    // Extract EntitySet names
+    const matches = [...metaTxt.matchAll(/EntitySet[^>]+Name="([^"]+)"/g)].map(m => m[1]);
+    // Also try the root without company
+    const rootR = await fetch('https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/$metadata', { headers: { Authorization: 'Bearer ' + accessToken, Accept: 'application/xml' } });
+    const rootTxt = await rootR.text();
+    const rootMatches = [...rootTxt.matchAll(/EntitySet[^>]+Name="([^"]+)"/g)].map(m => m[1]);
     renderSO([]);
     renderPO([]);
     renderItems([]);
-    document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB');
-    dbg.textContent = probeResults.join(' | ');
-    setStatus('grey', 'Probe complete — see blue bar');
+    document.getElementById('footer-ts').textContent = 'meta status: ' + metaR.status + ' root: ' + rootR.status;
+    dbg.textContent = 'Company entities (' + matches.length + '): ' + matches.slice(0,20).join(', ') + ' | Root entities (' + rootMatches.length + '): ' + rootMatches.slice(0,10).join(', ');
+    setStatus('grey', 'Metadata fetched — see blue bar');
   } catch(e) {
     if (e.message !== 'Token expired') {
       dbg.textContent = 'Error: ' + e.message;
