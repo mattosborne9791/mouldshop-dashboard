@@ -416,13 +416,21 @@ async function fetchAll() {
       bcGet('ItemLedgerEntries', '$select=Entry_No,Item_No,Quantity,Posting_Date&$filter=Entry_Type%20eq%20%27Purchase%27%20and%20Posting_Date%20eq%20' + today + '&$top=200'),
       bcGet('Posted_Sales_Shipment_Excel', '$select=No,Sell_to_Customer_Name,Shipment_Date,Order_No&$filter=Shipment_Date%20eq%20' + today + '&$top=200'),
       (async () => {
-        const candidates = ['SalesShipmentLines','salesShipmentLine','Posted_Sales_Shipment_Lines','postedSalesShipmentLines'];
+        const candidates = [
+          'Posted_Sales_Shipment_Line_Excel',
+          'Posted_Sales_Shipment_Lines_Excel',
+          'PostedSalesShipmentLineExcel',
+          'SalesShipmentLine_Excel',
+          'CS_PostedSalesShipmentLines',
+          'CS_Posted_Sales_Shipment_Lines',
+        ];
         for (const e of candidates) {
           try {
             const r = await bcGet(e, '$top=1');
             console.log('[SHIP-LINES] found entity:', e, r);
-            return await bcGet(e, '$top=500&$filter=Posting_Date%20eq%20' + today).catch(() =>
-                   bcGet(e, '$top=500&$filter=postingDate%20eq%20' + today).catch(() => ({value:[]})));
+            const f = (r.value||[]).length > 0 ? Object.keys(r.value[0]) : [];
+            console.log('[SHIP-LINES] fields:', f.join(', '));
+            return {value: r.value, _entity: e};
           } catch(ex) { console.log('[SHIP-LINES] 404:', e); }
         }
         return {value:[]};
