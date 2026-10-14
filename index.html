@@ -212,6 +212,7 @@ tr:hover td { background: var(--bg); }
     </div>
     <div class="kpi-row">
       <div class="kpi"><div class="kpi-label">Purchase Receipts Today</div><div class="kpi-value" id="kpi-rcpt">—</div><div class="kpi-sub">lines posted today</div></div>
+      <div class="kpi"><div class="kpi-label">Warehouse Shipments Today</div><div class="kpi-value" id="kpi-ship">—</div><div class="kpi-sub">by shipment count</div></div>
     </div>
 
     <div class="two-col">
@@ -407,11 +408,12 @@ async function fetchAll() {
   try {
     const today = new Date().toISOString().slice(0,10);
     const monthStart = today.slice(0,7) + '-01';
-    const [soRes, poRes, glRes, rcptRes] = await Promise.all([
+    const [soRes, poRes, glRes, rcptRes, shipRes] = await Promise.all([
       bcGet('SalesOrder', '$select=No,Sell_to_Customer_Name,Order_Date,Status&$filter=Order_Date%20eq%20' + today + '&$orderby=Order_Date%20desc&$top=50'),
       bcGet('purchaseDocuments', '$select=number,buyFromVendorName,orderDate,requestedReceiptDate,amountIncludingVat,status&$filter=requestedReceiptDate%20eq%20' + today + '&$orderby=requestedReceiptDate%20desc&$top=50'),
       bcGet('G_LEntries', '$select=G_L_Account_No,Amount&$filter=(G_L_Account_No%20eq%20%274000%27%20or%20G_L_Account_No%20eq%20%274009%27)%20and%20Posting_Date%20ge%20' + monthStart + '%20and%20Posting_Date%20le%20' + today + '&$top=2000'),
       bcGet('ItemLedgerEntries', '$select=Entry_No,Item_No,Quantity,Posting_Date&$filter=Entry_Type%20eq%20%27Purchase%27%20and%20Posting_Date%20eq%20' + today + '&$top=200'),
+      bcGet('Posted_Sales_Shipment_Excel', '$select=No,Sell_to_Customer_Name,Shipment_Date,Order_No&$filter=Shipment_Date%20eq%20' + today + '&$top=200'),
     ]);
 
     const soOrders = soRes.value || [];
@@ -484,6 +486,7 @@ async function fetchAll() {
     renderSO(soOrders, soLineTotals);
     renderPO(poRes.value || []);
     renderReceipts(rcptRes.value || []);
+    renderShipments(shipRes.value || []);
     document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
     dbg.textContent = 'Live Mouldshop · ' + soOrders.length + ' sales orders · ' + (poRes.value||[]).length + ' purchase orders';
     setStatus('live', 'Live');
@@ -537,6 +540,10 @@ function renderReceipts(rows) {
     <td style="text-align:right">${num(r.Quantity)}</td>
     <td style="white-space:nowrap">${fmtd(r.Posting_Date)}</td></tr>`).join('')
     : '<tr><td colspan="4" style="text-align:center;color:var(--fg3);padding:24px">No receipts posted today</td></tr>';
+}
+
+function renderShipments(rows) {
+  document.getElementById('kpi-ship').textContent = num(rows.length);
 }
 
 init();
