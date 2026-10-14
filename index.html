@@ -444,9 +444,13 @@ async function fetchAll() {
     try {
       let skip = 0;
       while (true) {
-        const page = await bcGet('salesDocumentLines', '$select=documentNumber,shippedNotInvoiced&$filter=documentType%20eq%20%27Order%27%20and%20shippedNotInvoiced%20gt%200%20and%20documentNumber%20ne%20%27SO0059942%27&$top=200&$skip=' + skip).catch(() => ({value:[]}));
+        const page = await bcGet('salesDocumentLines', '$select=documentNumber,shippedNotInvoiced&$filter=documentType%20eq%20%27Order%27%20and%20shippedNotInvoiced%20gt%200&$top=200&$skip=' + skip).catch(() => ({value:[]}));
         const rows = page.value || [];
-        rows.forEach(r => { sniTotal += Number(r.shippedNotInvoiced || 0); });
+        rows.forEach(r => {
+          const docNo = (r.documentNumber || '').trim();
+          if (docNo === 'SO0059942') { console.log('[SNI] EXCLUDING', JSON.stringify(r.documentNumber), r.shippedNotInvoiced); return; }
+          sniTotal += Number(r.shippedNotInvoiced || 0);
+        });
         if (rows.length < 200) break;
         skip += 200;
         if (skip > 10000) break;
