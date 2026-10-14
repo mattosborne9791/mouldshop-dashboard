@@ -180,7 +180,7 @@ tr:hover td { background: var(--bg); }
 <div id="dashboard" style="display:none">
   <div class="main">
     <div class="kpi-row">
-      <div class="kpi"><div class="kpi-label">Open Sales Orders</div><div class="kpi-value" id="kpi-so">—</div><div class="kpi-sub">by document count</div></div>
+      <div class="kpi"><div class="kpi-label">Sales Orders Today</div><div class="kpi-value" id="kpi-so">—</div><div class="kpi-sub">by document count</div></div>
       <div class="kpi"><div class="kpi-label">Sales Order Value</div><div class="kpi-value" id="kpi-sov">—</div><div class="kpi-sub">GBP, excl. VAT</div></div>
       <div class="kpi"><div class="kpi-label">Open Purchase Orders</div><div class="kpi-value" id="kpi-po">—</div><div class="kpi-sub">by document count</div></div>
       <div class="kpi"><div class="kpi-label">Purchase Order Value</div><div class="kpi-value" id="kpi-pov">—</div><div class="kpi-sub">GBP, excl. VAT</div></div>
@@ -190,7 +190,7 @@ tr:hover td { background: var(--bg); }
 
     <div class="two-col">
       <div>
-        <div class="section-head"><div class="section-title">Open Sales Orders</div><span class="badge" id="so-count">—</span></div>
+        <div class="section-head"><div class="section-title">Sales Orders — Today</div><span class="badge" id="so-count">—</span></div>
         <div class="table-wrap"><table>
           <thead><tr><th>Order No.</th><th>Customer</th><th>Date</th><th>Amount £</th><th>Status</th></tr></thead>
           <tbody id="so-body"><tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">Loading…</td></tr></tbody>
@@ -391,7 +391,7 @@ async function fetchAll() {
 
   try {
     const [soRes, poRes, itmRes] = await Promise.all([
-      bcGet('SalesOrder', '$select=No,Sell_to_Customer_Name,Order_Date,Status&$orderby=Order_Date%20desc&$top=50'),
+      bcGet('SalesOrder', '$select=No,Sell_to_Customer_Name,Order_Date,Status&$filter=Order_Date%20eq%20' + new Date().toISOString().slice(0,10) + '&$orderby=Order_Date%20desc&$top=50'),
       bcGet('purchaseDocuments', '$select=number,buyFromVendorName,orderDate,amountIncludingVat,status&$orderby=orderDate%20desc&$top=50'),
       bcGet('CS_Items', '$select=No,Description&$top=500')
     ]);
