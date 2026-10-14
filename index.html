@@ -218,7 +218,7 @@ tr:hover td { background: var(--bg); }
       <div class="kpi"><div class="kpi-label">Warehouse Shipments Today</div><div class="kpi-value" id="kpi-ship">—</div><div class="kpi-sub">by shipment count</div></div>
       <div class="kpi"><div class="kpi-label">Shipment Lines Today</div><div class="kpi-value" id="kpi-shiplines">—</div><div class="kpi-sub">lines posted today</div></div>
       <div class="kpi"><div class="kpi-label">Overdue Debtors</div><div class="kpi-value" id="kpi-overdue">—</div><div class="kpi-sub">GBP, overdue balance</div></div>
-      <div class="kpi"><div class="kpi-label">Shipped Not Invoiced</div><div class="kpi-value" id="kpi-sni">—</div><div class="kpi-sub">today's shipments, ex-VAT</div></div>
+      <div class="kpi"><div class="kpi-label">Shipped Not Invoiced</div><div class="kpi-value" id="kpi-sni">—</div><div class="kpi-sub">all open orders, ex SO0059942</div></div>
     </div>
 
     <div class="two-col">
@@ -439,24 +439,19 @@ async function fetchAll() {
       shipLinesRes = {value: allLines};
     }
 
-    // Shipped Not Invoiced — sum native BC field across all open sales orders
+    // Shipped Not Invoiced — sum across all open sales orders, excluding SO0059942
     let sniTotal = 0;
     try {
-      const sniProbe = await bcGet('SalesOrder', '$top=1').catch(() => ({value:[]}));
-      const sniFields = Object.keys((sniProbe.value||[{}])[0]);
-      console.log('[SNI] SalesOrder fields:', sniFields.join(','));
-      const sniField = sniFields.find(f => /ship.*inv|inv.*ship/i.test(f));
-      console.log('[SNI] matched field:', sniField);
-      if (sniField) {
-        let skip = 0;
-        while (true) {
-          const page = await bcGet('SalesOrder', '$select=' + sniField + '&$top=200&$skip=' + skip).catch(() => ({value:[]}));
-          const rows = page.value || [];
-          rows.forEach(r => { sniTotal += Number(r[sniField] || 0); });
-          if (rows.length < 200) break;
-          skip += 200;
-          if (skip > 5000) break;
-        }
+      let skip = 0;
+      while (true) {
+        const page = await bcGet('SalesOrder', '$select=No,Shipped_Not_Invoiced&$top=200&$skip=' + skip).catch(() => ({value:[]}));
+        const rows = page.value || [];
+        rows.forEach(r => {
+          if (r.No !== 'SO0059942') sniTotal += Number(r.Shipped_Not_Invoiced || 0);
+        });
+        if (rows.length < 200) break;
+        skip += 200;
+        if (skip > 10000) break;
       }
     } catch(e) { console.warn('SNI fetch failed:', e.message); }
 
