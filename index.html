@@ -393,9 +393,10 @@ async function fetchAll() {
     dbg.textContent = 'Live Mouldshop · fetching data…';
     const [soRes, itmRes] = await Promise.all([
       bcGet('salesOrder?$select=number,sellToCustomerName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50'),
-      bcGet('item?$select=number,displayName,inventory,reorderPoint&$top=500')
+      bcGet('item?$top=10')
     ]);
     renderSO(soRes.value || []);
+    const itmFields = itmRes.value && itmRes.value[0] ? Object.keys(itmRes.value[0]).join(', ') : 'no items';
     renderItems(itmRes.value || []);
 
     // Fetch PO separately — field name varies by BC version
@@ -419,7 +420,7 @@ async function fetchAll() {
     renderPO(poRows);
 
     document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
-    dbg.textContent = 'Live Mouldshop · ' + (soRes.value||[]).length + ' sales orders · ' + poRows.length + ' purchase orders · ' + (itmRes.value||[]).length + ' items';
+    dbg.textContent = 'Live Mouldshop · ' + (soRes.value||[]).length + ' sales orders · ' + poRows.length + ' POs · ' + (itmRes.value||[]).length + ' items | Item fields: ' + itmFields;
     setStatus('live', 'Live');
   } catch(e) {
     if (e.message !== 'Token expired') {
