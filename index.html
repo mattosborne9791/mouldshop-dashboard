@@ -221,6 +221,7 @@ tr:hover td { background: var(--bg); }
       <div class="kpi"><div class="kpi-label">Shipment Lines Today</div><div class="kpi-value" id="kpi-shiplines">—</div><div class="kpi-sub">lines posted today</div></div>
       <div class="kpi"><div class="kpi-label">Overdue Debtors</div><div class="kpi-value" id="kpi-overdue">—</div><div class="kpi-sub">GBP, overdue balance</div></div>
       <div class="kpi"><div class="kpi-label">Shipped Not Invoiced</div><div class="kpi-value" id="kpi-sni">—</div><div class="kpi-sub">all open orders, excl VAT</div></div>
+      <div class="kpi"><div class="kpi-label">Pipeline Invoice Value</div><div class="kpi-value" id="kpi-pipeline">—</div><div class="kpi-sub">outstanding order value, excl VAT</div></div>
     </div>
 
     <div class="two-col">
@@ -460,6 +461,20 @@ async function fetchAll() {
       }
     } catch(e) { console.warn('SNI fetch failed:', e.message); }
 
+    // Pipeline Invoice Value — sum outstandingAmountLcy across all open SO lines
+    let pipelineTotal = 0;
+    try {
+      let skip = 0;
+      while (true) {
+        const page = await bcGet('salesDocumentLines', '$select=documentNumber,documentType,outstandingAmountLcy&$filter=documentType%20eq%20%27Order%27%20and%20outstandingAmountLcy%20gt%200&$top=200&$skip=' + skip).catch(() => ({value:[]}));
+        const rows = page.value || [];
+        rows.forEach(r => { pipelineTotal += Number(r.outstandingAmountLcy || 0); });
+        if (rows.length < 200) break;
+        skip += 200;
+        if (skip > 10000) break;
+      }
+    } catch(e) { console.warn('Pipeline fetch failed:', e.message); }
+
     const soOrders = soRes.value || [];
 
     // Fetch sales lines per order in parallel to get ex-VAT totals
@@ -540,6 +555,8 @@ async function fetchAll() {
     renderOverdue(debtorRes.value || []);
     const sniEl = document.getElementById('kpi-sni');
     if (sniEl) { sniEl.textContent = gbp(sniTotal); }
+    const pipeEl = document.getElementById('kpi-pipeline');
+    if (pipeEl) { pipeEl.textContent = gbp(pipelineTotal); }
     document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
     dbg.textContent = 'Live Mouldshop · ' + soOrders.length + ' sales orders · ' + (poRes.value||[]).length + ' purchase orders';
     setStatus('live', 'Live');
