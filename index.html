@@ -427,11 +427,16 @@ async function fetchAll() {
 
     // Fetch shipment lines filtered to today's shipment document numbers
     const todayShipNos = (shipRes.value || []).map(r => r.No);
+    console.log('[SHIP] headers today:', todayShipNos.length, 'nos:', todayShipNos.slice(0,5).join(','));
     let shipLinesRes = {value:[]};
     if (todayShipNos.length > 0) {
       // Build OData filter: Document_No eq 'X' or Document_No eq 'Y' ...
       const docFilter = todayShipNos.map(n => "Document_No%20eq%20'" + encodeURIComponent(n) + "'").join('%20or%20');
-      shipLinesRes = await bcGet('Posted_Sales_Shipment_ExcelSalesShipmLines', '$select=Document_No,Line_No&$filter=' + docFilter + '&$top=2000').catch(() => ({value:[]}));
+      console.log('[SHIP] lines filter:', decodeURIComponent(docFilter).slice(0,200));
+      shipLinesRes = await bcGet('Posted_Sales_Shipment_ExcelSalesShipmLines', '$select=Document_No,Line_No&$filter=' + docFilter + '&$top=2000').catch(e => { console.log('[SHIP] lines error:', e.message); return {value:[]}; });
+      console.log('[SHIP] lines returned:', (shipLinesRes.value||[]).length, 'sample Doc_No:', (shipLinesRes.value||[])[0]?.Document_No);
+    } else {
+      console.log('[SHIP] no headers found for today — lines will be 0');
     }
 
     const soOrders = soRes.value || [];
