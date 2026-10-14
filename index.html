@@ -179,16 +179,31 @@ tr:hover td { background: var(--bg); }
     <div class="kpi-row">
       <div class="kpi"><div class="kpi-label">Sales Orders Today</div><div class="kpi-value" id="kpi-so">—</div><div class="kpi-sub">by document count</div></div>
       <div class="kpi"><div class="kpi-label">Sales Order Value</div><div class="kpi-value" id="kpi-sov">—</div><div class="kpi-sub">GBP, excl. VAT</div></div>
-      <div class="kpi" style="min-width:220px">
+      <div class="kpi" style="min-width:240px">
         <div class="kpi-label">Daily Target</div>
-        <div style="margin:10px 0 6px">
-          <div style="position:relative;height:22px;border-radius:11px;overflow:hidden;background:var(--border)">
-            <div id="meter-red" style="position:absolute;left:0;top:0;height:100%;background:#dc2626;border-radius:11px 0 0 11px;width:0%;transition:width .6s"></div>
-            <div id="meter-green" style="position:absolute;top:0;height:100%;background:#16a34a;border-radius:0 11px 11px 0;width:0%;transition:width .6s left .6s"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--fg3)"><span>£0</span><span>£16,678</span></div>
+        <div style="margin:6px 0 0">
+          <svg id="gauge-svg" viewBox="0 0 200 110" style="width:100%;display:block;overflow:visible">
+            <!-- Red arc: 0 to 16677 = 0° to 179° * (16677/30000) = ~99.9° -->
+            <!-- Full arc is 180° (left to right semicircle) -->
+            <!-- Red: 0–55.6% of arc, Green: 55.6–100% -->
+            <path d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="var(--border)" stroke-width="18" stroke-linecap="butt"/>
+            <path id="gauge-red" d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="#dc2626" stroke-width="18" stroke-linecap="butt"
+              stroke-dasharray="0 283" style="transition:stroke-dasharray .7s"/>
+            <path id="gauge-green" d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="#16a34a" stroke-width="18" stroke-linecap="butt"
+              stroke-dasharray="0 283" stroke-dashoffset="0" style="transition:all .7s"/>
+            <!-- Threshold tick at 55.59% -->
+            <line id="gauge-tick" x1="100" y1="10" x2="100" y2="22" stroke="var(--fg3)" stroke-width="2"/>
+            <!-- Needle -->
+            <line id="gauge-needle" x1="100" y1="100" x2="100" y2="18" stroke="var(--fg)" stroke-width="2.5" stroke-linecap="round"
+              style="transform-origin:100px 100px;transform:rotate(-90deg);transition:transform .7s"/>
+            <circle cx="100" cy="100" r="5" fill="var(--fg)"/>
+            <!-- Labels -->
+            <text x="6" y="114" font-size="9" fill="var(--fg3)" font-family="Inter,sans-serif">£0</text>
+            <text x="194" y="114" font-size="9" fill="var(--fg3)" font-family="Inter,sans-serif" text-anchor="end">£30k</text>
+            <text x="100" y="26" font-size="8" fill="var(--fg3)" font-family="Inter,sans-serif" text-anchor="middle">£16,678</text>
+          </svg>
+          <div id="meter-label" style="font-size:12px;text-align:center;margin-top:2px;color:var(--fg3)">Loading…</div>
         </div>
-        <div id="meter-label" style="font-size:12px;color:var(--fg3)">Loading…</div>
       </div>
       <div class="kpi"><div class="kpi-label">POs Due Today</div><div class="kpi-value" id="kpi-po">—</div><div class="kpi-sub">by document count</div></div>
       <div class="kpi"><div class="kpi-label">Monthly Invoiced</div><div class="kpi-value" id="kpi-gl">—</div><div class="kpi-sub">G/L 4000 less discounts</div></div>
@@ -410,23 +425,40 @@ async function fetchAll() {
     const glNet = Math.abs(gl4000) - Math.abs(gl4009);
     document.getElementById('kpi-gl').textContent = gbp(glNet);
 
-    // Progress meter — daily target £16,678, based on today's SO value
-    const METER_TARGET = 16678;
+    // Semicircular gauge — £0–£30,000, red zone £0–£16,677, green £16,678–£30,000
+    const GAUGE_MAX = 30000, GAUGE_THRESH = 16677;
+    const ARC_LEN = Math.PI * 90; // circumference of r=90 semicircle ≈ 282.7
     const soVal = Object.values(soLineTotals).reduce((s,v) => s+v, 0);
-    const clamped = Math.min(Math.max(soVal, 0), METER_TARGET);
-    const pct = clamped / METER_TARGET * 100;
-    const isGreen = soVal >= METER_TARGET;
-    if (isGreen) {
-      document.getElementById('meter-red').style.width = '0%';
-      document.getElementById('meter-green').style.left = '0%';
-      document.getElementById('meter-green').style.width = '100%';
-      document.getElementById('meter-green').style.borderRadius = '11px';
-    } else {
-      document.getElementById('meter-red').style.width = pct + '%';
-      document.getElementById('meter-red').style.borderRadius = pct >= 99 ? '11px' : '11px 0 0 11px';
-      document.getElementById('meter-green').style.width = '0%';
-    }
-    document.getElementById('meter-label').textContent = gbp(soVal) + ' of £16,678 target (' + Math.round(pct) + '%)';
+    const clampedVal = Math.min(Math.max(soVal, 0), GAUGE_MAX);
+    const valPct = clampedVal / GAUGE_MAX;        // 0–1
+    const threshPct = GAUGE_THRESH / GAUGE_MAX;   // 0.5559
+
+    // Red arc: always fills 0 → thresh (55.59% of arc)
+    const redLen = threshPct * ARC_LEN;
+    document.getElementById('gauge-red').setAttribute('stroke-dasharray', redLen + ' ' + (ARC_LEN - redLen));
+
+    // Green arc: fills thresh → current value (if above thresh)
+    const greenStart = threshPct * ARC_LEN;
+    const greenLen = Math.max(0, (valPct - threshPct)) * ARC_LEN;
+    document.getElementById('gauge-green').setAttribute('stroke-dasharray', greenLen + ' ' + (ARC_LEN - greenLen));
+    document.getElementById('gauge-green').setAttribute('stroke-dashoffset', -greenStart);
+
+    // Position threshold tick — rotate from bottom-centre
+    const threshDeg = threshPct * 180 - 90; // -90 = left, 0 = top, 90 = right
+    const threshRad = (threshDeg) * Math.PI / 180;
+    const tx1 = 100 + 90 * Math.cos(threshRad - Math.PI/2);
+    const ty1 = 100 + 90 * Math.sin(threshRad - Math.PI/2);
+    const tx2 = 100 + 76 * Math.cos(threshRad - Math.PI/2);
+    const ty2 = 100 + 76 * Math.sin(threshRad - Math.PI/2);
+    document.getElementById('gauge-tick').setAttribute('x1', tx1); document.getElementById('gauge-tick').setAttribute('y1', ty1);
+    document.getElementById('gauge-tick').setAttribute('x2', tx2); document.getElementById('gauge-tick').setAttribute('y2', ty2);
+
+    // Needle angle: -90deg = £0 (left), +90deg = £30k (right)
+    const needleDeg = valPct * 180 - 90;
+    document.getElementById('gauge-needle').style.transform = 'rotate(' + needleDeg + 'deg)';
+
+    const isGreen = soVal >= GAUGE_THRESH + 1;
+    document.getElementById('meter-label').textContent = gbp(soVal) + ' of £30,000 (' + Math.round(valPct * 100) + '%)';
     document.getElementById('meter-label').style.color = isGreen ? 'var(--good)' : 'var(--bad)';
 
     renderSO(soOrders, soLineTotals);
