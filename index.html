@@ -425,15 +425,17 @@ async function fetchAll() {
       bcGet('Posted_Sales_Shipment_Excel', '$select=No,Sell_to_Customer_Name,Shipment_Date,Order_No&$filter=Shipment_Date%20eq%20' + today + '&$top=200'),
       bcGet('ItemLedgerEntries', '$select=Entry_No,Document_No,Posting_Date&$filter=Entry_Type%20eq%20%27Sale%27%20and%20Posting_Date%20eq%20' + today + '&$top=500').catch(() => ({value:[]})),
       (async () => {
-        const candidates = ['Customer_Ledger_Entries','custLedgerEntry','customerLedgerEntries','CustLedgerEntry'];
+        const candidates = [
+          'custLedgerEntries','CustLedgerEntries','Cust_Ledger_Entries',
+          'CustomerLedgerEntries','Customer_Ledger_Entry','custLedgerEntry',
+          'CS_CustLedgerEntries','CS_CustomerLedgerEntries',
+          'DetailedCustLedgEntries','Detailed_Cust_Ledg_Entry',
+        ];
         for (const e of candidates) {
           try {
             const r = await bcGet(e, '$top=1');
-            console.log('[DEBTOR] found:', e, JSON.stringify(r).slice(0,300));
-            return await bcGet(e, '$top=2000&$filter=Open%20eq%20true%20and%20Due_Date%20lt%20' + today).catch(err => {
-              console.log('[DEBTOR] filter failed:', err.message);
-              return {value:[]};
-            });
+            console.log('[DEBTOR] FOUND:', e, JSON.stringify(r).slice(0,400));
+            return r;
           } catch(ex) { console.log('[DEBTOR] 404:', e); }
         }
         return {value:[]};
