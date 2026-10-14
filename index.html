@@ -390,17 +390,36 @@ async function fetchAll() {
   };
 
   try {
-    dbg.textContent = 'Live Mouldshop · fetching sales orders, purchase orders, items…';
-    const [soRes, poRes, itmRes] = await Promise.all([
+    dbg.textContent = 'Live Mouldshop · fetching data…';
+    const [soRes, itmRes] = await Promise.all([
       bcGet('salesOrder?$select=number,sellToCustomerName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50'),
-      bcGet('purchaseOrder?$select=number,vendorName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50'),
       bcGet('item?$select=number,displayName,inventory,reorderPoint&$top=500')
     ]);
     renderSO(soRes.value || []);
-    renderPO(poRes.value || []);
     renderItems(itmRes.value || []);
+
+    // Fetch PO separately — field name varies by BC version
+    let poRows = [];
+    try {
+      const poRes = await bcGet('purchaseOrder?$select=number,buyFromVendorName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50');
+      poRows = poRes.value || [];
+    } catch(pe) {
+      try {
+        const poRes2 = await bcGet('purchaseOrder?$select=number,vendorName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50');
+        poRows = poRes2.value || [];
+      } catch(pe2) {
+        try {
+          const poRes3 = await bcGet('purchaseOrder?$top=5');
+          poRows = poRes3.value || [];
+        } catch(pe3) {
+          dbg.textContent += ' | PO error: ' + pe3.message;
+        }
+      }
+    }
+    renderPO(poRows);
+
     document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
-    dbg.textContent = 'Live Mouldshop · ' + (soRes.value||[]).length + ' sales orders · ' + (poRes.value||[]).length + ' purchase orders · ' + (itmRes.value||[]).length + ' items';
+    dbg.textContent = 'Live Mouldshop · ' + (soRes.value||[]).length + ' sales orders · ' + poRows.length + ' purchase orders · ' + (itmRes.value||[]).length + ' items';
     setStatus('live', 'Live');
   } catch(e) {
     if (e.message !== 'Token expired') {
@@ -437,13 +456,13 @@ function renderPO(rows) {
   const tb = document.getElementById('po-body');
   tb.innerHTML = rows.length ? rows.slice(0,20).map(r => `<tr>
     <td class="mono">${r.number||'—'}</td>
-    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.vendorName||'—'}</td>
+    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.buyFromVendorName||r.vendorName||'—'}</td>
     <td style="white-space:nowrap">${fmtd(r.orderDate)}</td>
     <td style="text-align:right">${gbp(r.totalAmountIncludingTax)}</td>
     <td>${statusTag(r.status)}</td></tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No open purchase orders</td></tr>';
   const byVend = {};
-  rows.forEach(r => { const k=r.vendorName||'Unknown'; byVend[k]=(byVend[k]||0)+Number(r.totalAmountIncludingTax||0); });
+  rows.forEach(r => { const k=r.buyFromVendorName||r.vendorName||'Unknown'; byVend[k]=(byVend[k]||0)+Number(r.totalAmountIncludingTax||0); });
   renderChart('vend-chart', byVend);
 }
 
