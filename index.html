@@ -446,7 +446,7 @@ async function fetchAll() {
       while (true) {
         const page = await bcGet('salesDocumentLines', '$select=documentNumber,shippedNotInvoiced&$filter=documentType%20eq%20%27Order%27%20and%20shippedNotInvoiced%20gt%200&$top=200&$skip=' + skip).catch(() => ({value:[]}));
         const rows = page.value || [];
-        rows.forEach(r => { if (r.documentNumber !== 'SO0059942') sniTotal += Number(r.shippedNotInvoiced || 0); });
+        rows.forEach(r => { console.log('[SNI] doc:', JSON.stringify(r.documentNumber), 'val:', r.shippedNotInvoiced); if (r.documentNumber !== 'SO0059942') sniTotal += Number(r.shippedNotInvoiced || 0); });
         if (rows.length < 200) break;
         skip += 200;
         if (skip > 10000) break;
