@@ -399,15 +399,17 @@ async function fetchAll() {
 
     const soOrders = soRes.value || [];
 
-    // Fetch sales lines for today's orders to get ex-VAT totals
+    // Fetch sales lines per order in parallel to get ex-VAT totals
     let soLineTotals = {};
     if (soOrders.length > 0) {
-      const orderNums = soOrders.map(r => "'" + r.No + "'").join(',');
-      const filter = '$filter=documentNumber%20in%20(' + encodeURIComponent(orderNums) + ')&$select=documentNumber,amount';
       try {
-        const linesRes = await bcGet('salesDocumentLines', filter + '&$top=500');
-        (linesRes.value || []).forEach(l => {
-          soLineTotals[l.documentNumber] = (soLineTotals[l.documentNumber] || 0) + Number(l.amount || 0);
+        const lineResults = await Promise.all(soOrders.map(r =>
+          bcGet('salesDocumentLines', '$filter=documentNumber%20eq%20%27' + encodeURIComponent(r.No) + '%27&$select=documentNumber,amount&$top=200')
+        ));
+        lineResults.forEach(res => {
+          (res.value || []).forEach(l => {
+            soLineTotals[l.documentNumber] = (soLineTotals[l.documentNumber] || 0) + Number(l.amount || 0);
+          });
         });
       } catch(le) {
         console.warn('Lines fetch failed:', le.message);
