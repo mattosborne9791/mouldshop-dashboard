@@ -547,7 +547,7 @@ function renderReceipts(rows) {
 function renderShipments(rows, lines) {
   document.getElementById('kpi-ship').textContent = num(rows.length);
   const linesEl = document.getElementById('kpi-shiplines');
-  if (linesEl) linesEl.textContent = lines.length > 0 ? num(lines.length) : num(rows.length > 0 ? '?' : 0);
+  if (linesEl) linesEl.textContent = num(lines.length);
 }
 
 init();
