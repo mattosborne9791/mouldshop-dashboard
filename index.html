@@ -183,7 +183,7 @@ tr:hover td { background: var(--bg); }
       <div class="kpi"><div class="kpi-label">Sales Orders Today</div><div class="kpi-value" id="kpi-so">—</div><div class="kpi-sub">by document count</div></div>
       <div class="kpi"><div class="kpi-label">Sales Order Value</div><div class="kpi-value" id="kpi-sov">—</div><div class="kpi-sub">GBP, excl. VAT</div></div>
       <div class="kpi"><div class="kpi-label">POs Due Today</div><div class="kpi-value" id="kpi-po">—</div><div class="kpi-sub">by document count</div></div>
-      <div class="kpi"><div class="kpi-label">Monthly Invoiced</div><div class="kpi-value" id="kpi-gl">—</div><div class="kpi-sub">G/L 4000, excl. VAT</div></div>
+      <div class="kpi"><div class="kpi-label">Monthly Invoiced</div><div class="kpi-value" id="kpi-gl">—</div><div class="kpi-sub">G/L 4000 less discounts</div></div>
     </div>
 
     <div class="two-col">
@@ -385,7 +385,7 @@ async function fetchAll() {
     const [soRes, poRes, glRes] = await Promise.all([
       bcGet('SalesOrder', '$select=No,Sell_to_Customer_Name,Order_Date,Status&$filter=Order_Date%20eq%20' + today + '&$orderby=Order_Date%20desc&$top=50'),
       bcGet('purchaseDocuments', '$select=number,buyFromVendorName,orderDate,requestedReceiptDate,amountIncludingVat,status&$filter=requestedReceiptDate%20eq%20' + today + '&$orderby=requestedReceiptDate%20desc&$top=50'),
-      bcGet('G_LEntries', '$select=Amount&$filter=G_L_Account_No%20eq%20%274000%27%20and%20Posting_Date%20ge%20' + monthStart + '%20and%20Posting_Date%20le%20' + today + '&$top=1000'),
+      bcGet('G_LEntries', '$select=G_L_Account_No,Amount&$filter=(G_L_Account_No%20eq%20%274000%27%20or%20G_L_Account_No%20eq%20%274009%27)%20and%20Posting_Date%20ge%20' + monthStart + '%20and%20Posting_Date%20le%20' + today + '&$top=2000'),
     ]);
 
     const soOrders = soRes.value || [];
@@ -407,8 +407,9 @@ async function fetchAll() {
       }
     }
 
-    const glTotal = (glRes.value || []).reduce((s, r) => s + Number(r.Amount || 0), 0);
-    document.getElementById('kpi-gl').textContent = gbp(Math.abs(glTotal));
+    const gl4000 = (glRes.value || []).filter(r => r.G_L_Account_No === '4000').reduce((s, r) => s + Number(r.Amount || 0), 0);
+    const gl4009 = (glRes.value || []).filter(r => r.G_L_Account_No === '4009').reduce((s, r) => s + Number(r.Amount || 0), 0);
+    document.getElementById('kpi-gl').textContent = gbp(Math.abs(gl4000) - Math.abs(gl4009));
 
     renderSO(soOrders, soLineTotals);
     renderPO(poRes.value || []);
