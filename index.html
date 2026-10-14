@@ -323,7 +323,7 @@ tr:hover td { background: var(--surface2); }
     <div>
       <div class="section-head"><div class="section-title">Purchase Receipts — Today</div><span class="badge" id="rcpt-count">—</span></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Item No.</th><th style="text-align:right">Qty Received</th><th>Posting Date</th></tr></thead>
+        <thead><tr><th style="text-align:center">Item No.</th><th style="text-align:center">Qty Received</th><th style="text-align:center">Posting Date</th></tr></thead>
         <tbody id="rcpt-body"><tr><td colspan="3" style="text-align:center;color:var(--fg3);padding:24px">Loading…</td></tr></tbody>
       </table></div>
     </div>
@@ -677,9 +677,9 @@ function renderReceipts(rows) {
   document.getElementById("rcpt-count").textContent = rows.length;
   const tb = document.getElementById("rcpt-body");
   tb.innerHTML = rows.length ? rows.map(r => `<tr>
-    <td class="mono">${r.Item_No||"—"}</td>
-    <td style="text-align:right;font-variant-numeric:tabular-nums">${num(r.Quantity)}</td>
-    <td style="white-space:nowrap">${fmtd(r.Posting_Date)}</td></tr>`).join("")
+    <td class="mono" style="text-align:center">${r.Item_No||"—"}</td>
+    <td style="text-align:center;font-variant-numeric:tabular-nums">${num(r.Quantity)}</td>
+    <td style="text-align:center;white-space:nowrap">${fmtd(r.Posting_Date)}</td></tr>`).join("")
     : '<tr><td colspan="3" style="text-align:center;color:var(--fg3);padding:24px">No receipts posted today</td></tr>';
 }
 function renderShipments(rows, lines) {
