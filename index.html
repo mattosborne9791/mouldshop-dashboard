@@ -391,7 +391,8 @@ async function fetchAll() {
 
   try {
     dbg.textContent = 'Live Mouldshop · fetching data…';
-    const soRes = await bcGet('salesOrder?$select=number,sellToCustomerName,orderDate,totalAmountIncludingTax,status&$orderby=orderDate desc&$top=50');
+    const soRes = await bcGet('salesOrder?$top=3');
+    const soFields = soRes.value && soRes.value[0] ? Object.keys(soRes.value[0]).join(', ') : 'empty';
     renderSO(soRes.value || []);
 
     // Probe item entity name
@@ -428,7 +429,7 @@ async function fetchAll() {
     renderPO(poRows);
 
     document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
-    dbg.textContent = 'Live Mouldshop · ' + (soRes.value||[]).length + ' SO · ' + poRows.length + ' PO · entity=' + itmEntity + ' fields: ' + itmFields;
+    dbg.textContent = 'SO fields: ' + soFields + ' | item entity=' + itmEntity + ' fields: ' + itmFields;
     setStatus('live', 'Live');
   } catch(e) {
     if (e.message !== 'Token expired') {
