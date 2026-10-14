@@ -427,27 +427,19 @@ async function fetchAll() {
 
     // Fetch shipment lines filtered to today's shipment document numbers
     const todayShipNos = (shipRes.value || []).map(r => r.No);
-    console.log('[SHIP] headers today:', todayShipNos.length, 'nos:', todayShipNos.slice(0,5).join(','));
     let shipLinesRes = {value:[]};
     if (todayShipNos.length > 0) {
-      // Build OData filter: Document_No eq 'X' or Document_No eq 'Y' ...
       const docFilter = todayShipNos.map(n => "Document_No%20eq%20'" + encodeURIComponent(n) + "'").join('%20or%20');
-      console.log('[SHIP] lines filter:', decodeURIComponent(docFilter).slice(0,200));
-      // Page through all lines (BC may cap at 100 per page)
-      let allLines = [];
-      let skip = 0;
+      let allLines = [], skip = 0;
       while (true) {
-        const page = await bcGet('Posted_Sales_Shipment_ExcelSalesShipmLines', '$select=Document_No,Line_No&$filter=' + docFilter + '&$top=100&$skip=' + skip).catch(e => { console.log('[SHIP] lines page error skip=' + skip + ':', e.message); return {value:[]}; });
+        const page = await bcGet('Posted_Sales_Shipment_ExcelSalesShipmLines', '$select=Document_No,Line_No&$filter=' + docFilter + '&$top=100&$skip=' + skip).catch(() => ({value:[]}));
         const rows = page.value || [];
         allLines = allLines.concat(rows);
-        console.log('[SHIP] page skip=' + skip + ' got ' + rows.length + ' rows, total so far ' + allLines.length);
         if (rows.length < 100) break;
         skip += 100;
-        if (skip > 1000) break; // safety cap
+        if (skip > 1000) break;
       }
       shipLinesRes = {value: allLines};
-    } else {
-      console.log('[SHIP] no headers found for today — lines will be 0');
     }
 
     const soOrders = soRes.value || [];
@@ -520,7 +512,6 @@ async function fetchAll() {
     renderSO(soOrders, soLineTotals);
     renderPO(poRes.value || []);
     renderReceipts(rcptRes.value || []);
-    console.log('[SHIP] rendering: headers=' + (shipRes.value||[]).length + ' lines=' + (shipLinesRes.value||[]).length);
     renderShipments(shipRes.value || [], shipLinesRes.value || []);
     renderOverdue(debtorRes.value || []);
     document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
