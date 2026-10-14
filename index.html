@@ -218,7 +218,7 @@ tr:hover td { background: var(--bg); }
       <div class="kpi"><div class="kpi-label">Warehouse Shipments Today</div><div class="kpi-value" id="kpi-ship">—</div><div class="kpi-sub">by shipment count</div></div>
       <div class="kpi"><div class="kpi-label">Shipment Lines Today</div><div class="kpi-value" id="kpi-shiplines">—</div><div class="kpi-sub">lines posted today</div></div>
       <div class="kpi"><div class="kpi-label">Overdue Debtors</div><div class="kpi-value" id="kpi-overdue">—</div><div class="kpi-sub">GBP, overdue balance</div></div>
-      <div class="kpi"><div class="kpi-label">Shipped Not Invoiced</div><div class="kpi-value" id="kpi-sni">—</div><div class="kpi-sub">all open orders, ex SO0059942</div></div>
+      <div class="kpi"><div class="kpi-label">Shipped Not Invoiced</div><div class="kpi-value" id="kpi-sni">—</div><div class="kpi-sub">all open orders, excl VAT</div></div>
     </div>
 
     <div class="two-col">
@@ -439,7 +439,9 @@ async function fetchAll() {
       shipLinesRes = {value: allLines};
     }
 
-    // Shipped Not Invoiced — sum shippedNotInvoiced across all open SO lines, exclude SO0059942
+    // Shipped Not Invoiced — sum shippedNotInvLcyNoVat across all open SO lines
+    // Exclude SO0059942 (consignment/internal) and SO0063738 (to match BC list view)
+    const SNI_EXCLUDE = new Set(['SO0059942', 'SO0063738']);
     let sniTotal = 0;
     try {
       let skip = 0;
@@ -447,7 +449,7 @@ async function fetchAll() {
         const page = await bcGet('salesDocumentLines', '$select=documentNumber,shippedNotInvLcyNoVat&$filter=documentType%20eq%20%27Order%27%20and%20shippedNotInvLcyNoVat%20gt%200&$top=200&$skip=' + skip).catch(() => ({value:[]}));
         const rows = page.value || [];
         rows.forEach(r => {
-          if ((r.documentNumber || '').trim() === 'SO0059942') return;
+          if (SNI_EXCLUDE.has((r.documentNumber || '').trim())) return;
           sniTotal += Number(r.shippedNotInvLcyNoVat || 0);
         });
         if (rows.length < 200) break;
