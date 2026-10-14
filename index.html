@@ -179,6 +179,17 @@ tr:hover td { background: var(--bg); }
     <div class="kpi-row">
       <div class="kpi"><div class="kpi-label">Sales Orders Today</div><div class="kpi-value" id="kpi-so">—</div><div class="kpi-sub">by document count</div></div>
       <div class="kpi"><div class="kpi-label">Sales Order Value</div><div class="kpi-value" id="kpi-sov">—</div><div class="kpi-sub">GBP, excl. VAT</div></div>
+      <div class="kpi" style="min-width:220px">
+        <div class="kpi-label">Monthly Target</div>
+        <div style="margin:10px 0 6px">
+          <div style="position:relative;height:22px;border-radius:11px;overflow:hidden;background:var(--border)">
+            <div id="meter-red" style="position:absolute;left:0;top:0;height:100%;background:#dc2626;border-radius:11px 0 0 11px;width:0%;transition:width .6s"></div>
+            <div id="meter-green" style="position:absolute;top:0;height:100%;background:#16a34a;border-radius:0 11px 11px 0;width:0%;transition:width .6s left .6s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--fg3)"><span>£0</span><span id="meter-threshold">£16,677</span><span>£30,000</span></div>
+        </div>
+        <div id="meter-label" style="font-size:12px;color:var(--fg3)">Loading…</div>
+      </div>
       <div class="kpi"><div class="kpi-label">POs Due Today</div><div class="kpi-value" id="kpi-po">—</div><div class="kpi-sub">by document count</div></div>
       <div class="kpi"><div class="kpi-label">Monthly Invoiced</div><div class="kpi-value" id="kpi-gl">—</div><div class="kpi-sub">G/L 4000 less discounts</div></div>
     </div>
@@ -396,7 +407,27 @@ async function fetchAll() {
 
     const gl4000 = (glRes.value || []).filter(r => r.G_L_Account_No === '4000').reduce((s, r) => s + Number(r.Amount || 0), 0);
     const gl4009 = (glRes.value || []).filter(r => r.G_L_Account_No === '4009').reduce((s, r) => s + Number(r.Amount || 0), 0);
-    document.getElementById('kpi-gl').textContent = gbp(Math.abs(gl4000) - Math.abs(gl4009));
+    const glNet = Math.abs(gl4000) - Math.abs(gl4009);
+    document.getElementById('kpi-gl').textContent = gbp(glNet);
+
+    // Progress meter — £0–£30,000, threshold at £16,677
+    const METER_MAX = 30000, METER_THRESH = 16677;
+    const clamped = Math.min(Math.max(glNet, 0), METER_MAX);
+    const pct = clamped / METER_MAX * 100;
+    const threshPct = METER_THRESH / METER_MAX * 100;
+    const isGreen = glNet >= METER_THRESH;
+    if (isGreen) {
+      document.getElementById('meter-red').style.width = threshPct + '%';
+      document.getElementById('meter-green').style.left = threshPct + '%';
+      document.getElementById('meter-green').style.width = (pct - threshPct) + '%';
+      document.getElementById('meter-green').style.borderRadius = pct >= 100 ? '0 11px 11px 0' : '0 11px 11px 0';
+    } else {
+      document.getElementById('meter-red').style.width = pct + '%';
+      document.getElementById('meter-red').style.borderRadius = pct >= 100 ? '11px' : '11px 0 0 11px';
+      document.getElementById('meter-green').style.width = '0%';
+    }
+    document.getElementById('meter-label').textContent = gbp(glNet) + ' of £30,000 target (' + Math.round(pct) + '%)';
+    document.getElementById('meter-label').style.color = isGreen ? 'var(--good)' : 'var(--bad)';
 
     renderSO(soOrders, soLineTotals);
     renderPO(poRes.value || []);
