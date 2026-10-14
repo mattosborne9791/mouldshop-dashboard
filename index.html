@@ -401,25 +401,18 @@ async function fetchAll() {
       return r.json();
     };
 
-    const [soRes, poRes, itmRes] = await Promise.all([
-      rootGet('SalesOrder?$filter=Company_Id eq ' + COMPANY_ID + '&$top=50'),
-      rootGet('PurchaseOrder?$filter=Company_Id eq ' + COMPANY_ID + '&$top=50').catch(() => rootGet('PurchaseOrder?$top=1')),
-      rootGet('ItemSalesAndProfit?$filter=Company_Id eq ' + COMPANY_ID + '&$top=5').catch(() => ({ value: [] }))
-    ]);
+    // Fetch one raw SO to discover field names
+    const soRaw = await rootGet('SalesOrder?$top=1');
+    const soFields = soRaw.value && soRaw.value[0] ? Object.keys(soRaw.value[0]) : [];
+    // Find the company-related field
+    const companyField = soFields.find(f => f.toLowerCase().includes('company')) || 'NONE';
 
-    // Also try plain item entity from root
-    let itmRows = itmRes.value || [];
-    if (!itmRows.length) {
-      try { const r = await rootGet('Item?$filter=Company_Id eq ' + COMPANY_ID + '&$top=500'); itmRows = r.value || []; } catch(e) {}
-    }
-
-    renderSO(soRes.value || []);
-    renderPO(poRes.value || []);
-    renderItems(itmRows);
-    document.getElementById('footer-ts').textContent = 'Last updated: ' + new Date().toLocaleString('en-GB') + ' · Auto-refreshes every 30 min';
-    const soF = soRes.value && soRes.value[0] ? Object.keys(soRes.value[0]).slice(0,8).join(',') : 'empty';
-    dbg.textContent = 'SO:' + (soRes.value||[]).length + ' PO:' + (poRes.value||[]).length + ' Items:' + itmRows.length + ' | SO fields: ' + soF;
-    setStatus('live', 'Live');
+    renderSO([]);
+    renderPO([]);
+    renderItems([]);
+    document.getElementById('footer-ts').textContent = 'Raw SO fields found';
+    dbg.textContent = 'SO fields: ' + soFields.join(', ') + ' | Company field: ' + companyField;
+    setStatus('grey', 'Field discovery — see blue bar');
   } catch(e) {
     if (e.message !== 'Token expired') {
       dbg.textContent = 'Error: ' + e.message;
