@@ -230,11 +230,12 @@ tr:hover td { background: var(--surface2); }
         <svg id="gauge-svg" viewBox="0 -18 200 128" style="width:100%;max-width:280px;display:block;overflow:visible;margin:0 auto">
           <defs>
             <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%"   stop-color="#dc2626"/>
-              <stop offset="32%"  stop-color="#f97316"/>
-              <stop offset="66%"  stop-color="#eab308"/>
-              <stop offset="99%"  stop-color="#eab308"/>
-              <stop offset="100%" stop-color="#16a34a"/>
+              <stop offset="0%"     stop-color="#dc2626"/>
+              <stop offset="21.3%"  stop-color="#f97316"/>
+              <stop offset="44%"    stop-color="#eab308"/>
+              <stop offset="66.6%"  stop-color="#eab308"/>
+              <stop offset="66.7%"  stop-color="#16a34a"/>
+              <stop offset="100%"   stop-color="#16a34a"/>
             </linearGradient>
           </defs>
           <path d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="var(--border)" stroke-width="18" stroke-linecap="butt"/>
@@ -629,7 +630,7 @@ async function fetchAll() {
     document.getElementById("kpi-gl").textContent = gbp(Math.abs(gl4000) - Math.abs(gl4009));
 
     // Gauge
-    const GAUGE_MAX = 30000, GAUGE_RED_END = 13999, GAUGE_THRESH = 16678;
+    const GAUGE_MAX = 25017, GAUGE_RED_END = 13999, GAUGE_THRESH = 16678; // max = 150% of daily target
     const ARC_LEN = Math.PI * 90;
     const soVal = Object.values(soLineTotals).reduce((s,v) => s+v, 0);
     const clampedVal = Math.min(Math.max(soVal, 0), GAUGE_MAX);
