@@ -231,8 +231,9 @@ tr:hover td { background: var(--surface2); }
           <defs>
             <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%"   stop-color="#dc2626"/>
-              <stop id="grad-stop-orange" offset="46.7%" stop-color="#f97316"/>
-              <stop id="grad-stop-green"  offset="55.6%" stop-color="#16a34a"/>
+              <stop offset="32%"  stop-color="#f97316"/>
+              <stop offset="66%"  stop-color="#eab308"/>
+              <stop offset="99%"  stop-color="#eab308"/>
               <stop offset="100%" stop-color="#16a34a"/>
             </linearGradient>
           </defs>
@@ -637,8 +638,7 @@ async function fetchAll() {
     const threshPct  = GAUGE_THRESH  / GAUGE_MAX;
 
     // Gradient stops pinned to threshold positions
-    document.getElementById("grad-stop-orange").setAttribute("offset", (redEndPct * 100).toFixed(1) + "%");
-    document.getElementById("grad-stop-green").setAttribute("offset",  (threshPct  * 100).toFixed(1) + "%");
+    // gradient stops are fixed: red→orange@32%→yellow@66%→green@100%
 
     const threshDeg = threshPct * 180 - 90;
     const threshRad = threshDeg * Math.PI / 180;
