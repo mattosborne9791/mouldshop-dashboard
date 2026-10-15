@@ -228,11 +228,16 @@ tr:hover td { background: var(--surface2); }
       <div class="kpi-gauge">
         <div class="kpi-label">Daily Target</div>
         <svg id="gauge-svg" viewBox="0 -18 200 128" style="width:100%;max-width:280px;display:block;overflow:visible;margin:0 auto">
+          <defs>
+            <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%"   stop-color="#dc2626"/>
+              <stop id="grad-stop-orange" offset="46.7%" stop-color="#f97316"/>
+              <stop id="grad-stop-green"  offset="55.6%" stop-color="#16a34a"/>
+              <stop offset="100%" stop-color="#16a34a"/>
+            </linearGradient>
+          </defs>
           <path d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="var(--border)" stroke-width="18" stroke-linecap="butt"/>
-          <path id="gauge-red-bg"    d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="#dc2626" stroke-width="18" stroke-linecap="butt" stroke-dasharray="0 283"/>
-          <path id="gauge-orange-bg" d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="#f97316" stroke-width="18" stroke-linecap="butt" stroke-dasharray="0 283" stroke-dashoffset="0"/>
-          <path id="gauge-green-bg"  d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="#14532d" stroke-width="18" stroke-linecap="butt" stroke-dasharray="0 283" stroke-dashoffset="0"/>
-          <path id="gauge-green"     d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="#16a34a" stroke-width="18" stroke-linecap="butt" stroke-dasharray="0 283" stroke-dashoffset="0" style="transition:all .7s"/>
+          <path id="gauge-track" d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="url(#gauge-grad)" stroke-width="18" stroke-linecap="butt" stroke-dasharray="0 283" style="transition:stroke-dasharray .7s"/>
           <line id="gauge-tick" x1="100" y1="10" x2="100" y2="22" stroke="var(--fg3)" stroke-width="2"/>
           <line id="gauge-needle" x1="100" y1="100" x2="100" y2="18" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"
             style="transform-origin:100px 100px;transform:rotate(-90deg);transition:transform .7s"/>
@@ -631,17 +636,12 @@ async function fetchAll() {
     const redEndPct  = GAUGE_RED_END / GAUGE_MAX;
     const threshPct  = GAUGE_THRESH  / GAUGE_MAX;
 
-    const redLen = redEndPct * ARC_LEN;
-    document.getElementById("gauge-red-bg").setAttribute("stroke-dasharray", redLen + " " + (ARC_LEN - redLen));
-    const orangeLen = (threshPct - redEndPct) * ARC_LEN;
-    document.getElementById("gauge-orange-bg").setAttribute("stroke-dasharray", orangeLen + " " + (ARC_LEN - orangeLen));
-    document.getElementById("gauge-orange-bg").setAttribute("stroke-dashoffset", -(redEndPct * ARC_LEN));
-    const greenBgLen = (1 - threshPct) * ARC_LEN;
-    document.getElementById("gauge-green-bg").setAttribute("stroke-dasharray", greenBgLen + " " + (ARC_LEN - greenBgLen));
-    document.getElementById("gauge-green-bg").setAttribute("stroke-dashoffset", -(threshPct * ARC_LEN));
-    const greenLen = Math.max(0, (valPct - threshPct)) * ARC_LEN;
-    document.getElementById("gauge-green").setAttribute("stroke-dasharray", greenLen + " " + (ARC_LEN - greenLen));
-    document.getElementById("gauge-green").setAttribute("stroke-dashoffset", -(threshPct * ARC_LEN));
+    // Gradient stops at threshold positions
+    document.getElementById("grad-stop-orange").setAttribute("offset", (redEndPct * 100).toFixed(1) + "%");
+    document.getElementById("grad-stop-green").setAttribute("offset",  (threshPct  * 100).toFixed(1) + "%");
+    // Single track arc, grows from left up to current value
+    const trackLen = valPct * ARC_LEN;
+    document.getElementById("gauge-track").setAttribute("stroke-dasharray", trackLen + " " + (ARC_LEN - trackLen));
 
     const threshDeg = threshPct * 180 - 90;
     const threshRad = threshDeg * Math.PI / 180;
