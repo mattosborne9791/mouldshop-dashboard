@@ -9,7 +9,13 @@ const TENANT   = 'f17044ae-2b66-4aa4-951b-38908b13d18b';
 const CLIENT   = '94cf8276-e615-4d6e-a825-fb71f5568b8b';
 const SECRET   = 'PCw8Q~JToVo-lSDikqEtwl4G7tXyDbBuYBsS5aab';
 const BC_ROOT  = `https://api.businesscentral.dynamics.com/v2.0/${TENANT}/Production/ODataV4/Company('Live%20Mouldshop')/`;
-const TO_EMAIL = 'matt@mouldshop.com';
+const TO_EMAIL  = 'matt@mouldshop.com';
+const TO_EMAILS = [
+  'matt@mouldshop.com',
+  'mark@mouldshop.com',
+  'Liam@mouldshop.com',
+  'mattb@mouldshop.com',
+];
 const DAILY_TARGET = 16678;
 
 async function getToken(scope) {
@@ -244,7 +250,7 @@ async function main() {
     message: {
       subject,
       body: { contentType: 'HTML', content: html },
-      toRecipients: [{ emailAddress: { address: TO_EMAIL } }]
+      toRecipients: TO_EMAILS.map(a => ({ emailAddress: { address: a } }))
     },
     saveToSentItems: true
   };
