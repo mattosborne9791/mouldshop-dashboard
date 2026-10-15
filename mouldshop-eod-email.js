@@ -136,18 +136,20 @@ async function main() {
     .sort((a,b) => b[1].total - a[1].total)
     .map(([st, d]) => `
     <tr>
-      <td style="padding:7px 10px;border-bottom:1px solid #253470;">${statusBadge(st)}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:center;color:#9aafd4;">${d.count}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:right;color:#f4f4f4;font-variant-numeric:tabular-nums;">${fmt(d.total)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #253470;width:40%;">${statusBadge(st)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:center;color:#9aafd4;width:15%;font-variant-numeric:tabular-nums;">${d.count}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:right;color:#f4f4f4;width:25%;font-variant-numeric:tabular-nums;">${fmt(d.total)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:right;color:#607098;width:20%;font-variant-numeric:tabular-nums;font-size:12px;">${((d.total/grandTotal)*100).toFixed(1)}%</td>
     </tr>`).join('');
 
   const spRows = Object.entries(bySalesperson)
     .sort((a,b) => b[1].total - a[1].total)
     .map(([sp, d]) => `
     <tr>
-      <td style="padding:7px 10px;border-bottom:1px solid #253470;color:#f4f4f4;font-weight:600;">${sp}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:center;color:#9aafd4;">${d.count}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:right;color:#f4f4f4;font-variant-numeric:tabular-nums;">${fmt(d.total)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #253470;color:#f4f4f4;font-weight:600;width:40%;">${sp}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:center;color:#9aafd4;width:15%;font-variant-numeric:tabular-nums;">${d.count}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:right;color:#f4f4f4;width:25%;font-variant-numeric:tabular-nums;">${fmt(d.total)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:right;color:#607098;width:20%;font-variant-numeric:tabular-nums;font-size:12px;">${((d.total/grandTotal)*100).toFixed(1)}%</td>
     </tr>`).join('');
 
   const html = `<!DOCTYPE html>
@@ -198,12 +200,13 @@ async function main() {
 
   <div style="background:#182048;border:1px solid #253470;border-radius:8px;margin-bottom:20px;overflow:hidden;">
     <div style="padding:14px 16px;border-bottom:1px solid #253470;font-size:13px;font-weight:600;color:#9aafd4;text-transform:uppercase;letter-spacing:0.06em;">By Status</div>
-    <table style="width:100%;border-collapse:collapse;">
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
       <thead>
         <tr style="background:#1e2a58;">
-          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;">Status</th>
-          <th style="padding:8px 10px;text-align:center;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;">Orders</th>
-          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;">Total excl. VAT</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:40%;">Status</th>
+          <th style="padding:8px 10px;text-align:center;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:15%;">Orders</th>
+          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:25%;">Total excl. VAT</th>
+          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:20%;">% of Total</th>
         </tr>
       </thead>
       <tbody>${statusRows}</tbody>
@@ -212,12 +215,13 @@ async function main() {
 
   <div style="background:#182048;border:1px solid #253470;border-radius:8px;margin-bottom:20px;overflow:hidden;">
     <div style="padding:14px 16px;border-bottom:1px solid #253470;font-size:13px;font-weight:600;color:#9aafd4;text-transform:uppercase;letter-spacing:0.06em;">By Salesperson</div>
-    <table style="width:100%;border-collapse:collapse;">
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
       <thead>
         <tr style="background:#1e2a58;">
-          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;">Salesperson</th>
-          <th style="padding:8px 10px;text-align:center;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;">Orders</th>
-          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;">Total excl. VAT</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:40%;">Salesperson</th>
+          <th style="padding:8px 10px;text-align:center;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:15%;">Orders</th>
+          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:25%;">Total excl. VAT</th>
+          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:20%;">% of Total</th>
         </tr>
       </thead>
       <tbody>${spRows}</tbody>
