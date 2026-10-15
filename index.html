@@ -513,7 +513,7 @@ async function fetchAll() {
     // Alert KPI fetches (parallel)
     const [lateRes, poOverdueRes, dueShipRes] = await Promise.all([
       bcGet("SalesOrder", "$select=No,Shipment_Date,Status&$filter=Shipment_Date%20lt%20" + today + "%20and%20Shipment_Date%20gt%200001-01-01%20and%20(Status%20eq%20'Open'%20or%20Status%20eq%20'Released')&$top=500").catch(() => ({value:[]})),
-      bcGet("purchaseDocuments", "$select=number,requestedReceiptDate,status&$filter=requestedReceiptDate%20lt%20" + today + "%20and%20(status%20eq%20%27Open%27%20or%20status%20eq%20%27Released%27)&$top=200").catch(() => ({value:[]})),
+      bcGet("purchaseDocuments", "$select=number,requestedReceiptDate,status&$filter=requestedReceiptDate%20lt%20" + today + "%20and%20requestedReceiptDate%20gt%200001-01-01%20and%20(status%20eq%20%27Open%27%20or%20status%20eq%20%27Released%27)&$top=500").catch(() => ({value:[]})),
       bcGet("SalesOrder", "$select=No,Shipment_Date,Completely_Shipped&$filter=Shipment_Date%20eq%20" + today + "%20and%20Completely_Shipped%20eq%20false&$top=200").catch(() => ({value:[]})),
     ]);
 
