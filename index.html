@@ -298,7 +298,7 @@ tr:hover td { background: var(--surface2); }
         <div class="kpi kpi-accent-warn">
           <div class="kpi-label">Due to Ship Today</div>
           <div class="kpi-value" id="kpi-due-ship" style="color:var(--warn)">—</div>
-          <div class="kpi-sub">orders promised today, not yet shipped</div>
+          <div class="kpi-sub">open orders due today, not yet released</div>
         </div>
       </div>
     </div>
@@ -520,7 +520,7 @@ async function fetchAll() {
     const [lateRes, poOverdueRes, dueShipRes] = await Promise.all([
       bcGet("SalesOrder", "$select=No,Shipment_Date,Status&$filter=Shipment_Date%20lt%20" + today + "%20and%20Shipment_Date%20gt%200001-01-01%20and%20(Status%20eq%20'Open'%20or%20Status%20eq%20'Released')&$top=500").catch(() => ({value:[]})),
       bcGet("purchaseDocuments", "$select=number,requestedReceiptDate,status&$filter=requestedReceiptDate%20lt%20" + today + "%20and%20requestedReceiptDate%20gt%200001-01-01%20and%20(status%20eq%20%27Open%27%20or%20status%20eq%20%27Released%27)&$top=500").catch(() => ({value:[]})),
-      bcGet("SalesOrder", "$select=No,Shipment_Date,Completely_Shipped&$filter=Shipment_Date%20eq%20" + today + "%20and%20Completely_Shipped%20eq%20false&$top=200").catch(() => ({value:[]})),
+      bcGet("SalesOrder", "$select=No,Shipment_Date,Status&$filter=Shipment_Date%20eq%20" + today + "%20and%20Status%20eq%20'Open'&$top=200").catch(() => ({value:[]})),
     ]);
 
     const lateEl = document.getElementById("kpi-late");
