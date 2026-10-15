@@ -237,7 +237,7 @@ tr:hover td { background: var(--surface2); }
             </linearGradient>
           </defs>
           <path d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="var(--border)" stroke-width="18" stroke-linecap="butt"/>
-          <path id="gauge-track" d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="url(#gauge-grad)" stroke-width="18" stroke-linecap="butt" stroke-dasharray="0 283" style="transition:stroke-dasharray .7s"/>
+          <path id="gauge-track" d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="url(#gauge-grad)" stroke-width="18" stroke-linecap="butt"/>
           <line id="gauge-tick" x1="100" y1="10" x2="100" y2="22" stroke="var(--fg3)" stroke-width="2"/>
           <line id="gauge-needle" x1="100" y1="100" x2="100" y2="18" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"
             style="transform-origin:100px 100px;transform:rotate(-90deg);transition:transform .7s"/>
@@ -636,12 +636,9 @@ async function fetchAll() {
     const redEndPct  = GAUGE_RED_END / GAUGE_MAX;
     const threshPct  = GAUGE_THRESH  / GAUGE_MAX;
 
-    // Gradient stops at threshold positions
+    // Gradient stops pinned to threshold positions
     document.getElementById("grad-stop-orange").setAttribute("offset", (redEndPct * 100).toFixed(1) + "%");
     document.getElementById("grad-stop-green").setAttribute("offset",  (threshPct  * 100).toFixed(1) + "%");
-    // Single track arc, grows from left up to current value
-    const trackLen = valPct * ARC_LEN;
-    document.getElementById("gauge-track").setAttribute("stroke-dasharray", trackLen + " " + (ARC_LEN - trackLen));
 
     const threshDeg = threshPct * 180 - 90;
     const threshRad = threshDeg * Math.PI / 180;
