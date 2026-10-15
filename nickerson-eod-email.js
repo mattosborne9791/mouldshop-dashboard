@@ -10,7 +10,7 @@ const CLIENT   = '94cf8276-e615-4d6e-a825-fb71f5568b8b';
 const SECRET   = 'PCw8Q~JToVo-lSDikqEtwl4G7tXyDbBuYBsS5aab';
 const BC_ROOT  = `https://api.businesscentral.dynamics.com/v2.0/${TENANT}/Production/ODataV4/Company('Nickerson%20(Live)')/`;
 const TO_EMAIL = 'matt@mouldshop.com';
-const DAILY_TARGET = 16678;
+const DAILY_TARGET = 7840;
 
 async function getToken(scope) {
   const res = await fetch(`https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`, {
