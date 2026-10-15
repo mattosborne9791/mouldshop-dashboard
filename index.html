@@ -360,7 +360,7 @@ const BC_ROOT = "https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa
 const BC_CO   = "company=Live%20Mouldshop";
 const SCOPE   = "https://api.businesscentral.dynamics.com/.default";
 const REDIRECT = location.origin + location.pathname;
-const REFRESH_MS = 30 * 60 * 1000;
+const REFRESH_MS = 10 * 60 * 1000;
 
 let accessToken = null, refreshTimer = null;
 
@@ -668,7 +668,7 @@ async function fetchAll() {
     const pipeEl = document.getElementById("kpi-pipeline");
     if (pipeEl) { pipeEl.textContent = gbp(pipelineTotal); }
 
-    document.getElementById("footer-ts").textContent = "Last updated: " + new Date().toLocaleString("en-GB") + " · Auto-refreshes every 30 min";
+    document.getElementById("footer-ts").textContent = "Last updated: " + new Date().toLocaleString("en-GB") + " · Auto-refreshes every 10 min";
     dbg.textContent = "Live Mouldshop · " + soOrders.length + " sales orders · " + (poRes.value||[]).length + " purchase orders";
     setStatus("live", "Live");
   } catch(e) {
