@@ -61,13 +61,13 @@ function fmt(n) {
 
 function statusBadge(status) {
   const colours = {
-    'Open':                { bg: '#253470', fg: '#9aafd4' },
-    'Released':            { bg: '#052d14', fg: '#4ade80' },
+    'Open':                { bg: '#1e3260', fg: '#8fa3c8' },
+    'Released':            { bg: '#052d1f', fg: '#34d399' },
     'Pending Prepayment':  { bg: '#271a02', fg: '#fbbf24' },
-    'Pending Approval':    { bg: '#1e1a02', fg: '#fbbf24' },
+    'Pending Approval':    { bg: '#271a02', fg: '#fbbf24' },
   };
-  const c = colours[status] || { bg: '#1e2a58', fg: '#f4f4f4' };
-  return `<span style="background:${c.bg};color:${c.fg};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${status}</span>`;
+  const c = colours[status] || { bg: '#162444', fg: '#e8edf5' };
+  return `<span style="background:${c.bg};color:${c.fg};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">${status}</span>`;
 }
 
 async function main() {
@@ -119,83 +119,83 @@ async function main() {
   // --- Build HTML ---
   const orderRows = orders.map(o => `
     <tr>
-      <td style="padding:8px 10px;border-bottom:1px solid #253470;font-family:monospace;font-size:13px;color:#9aafd4;">${o.No}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid #253470;color:#f4f4f4;">${o.Sell_to_Customer_Name || '—'}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid #253470;text-align:right;color:#f4f4f4;font-variant-numeric:tabular-nums;">${fmt(o.Amount)}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid #253470;">${statusBadge(o.Status)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #1e3260;font-family:monospace;font-size:13px;color:#8fa3c8;">${o.No}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #1e3260;color:#e8edf5;">${o.Sell_to_Customer_Name || '—'}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #1e3260;text-align:right;color:#e8edf5;font-variant-numeric:tabular-nums;">${fmt(o.Amount)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #1e3260;">${statusBadge(o.Status)}</td>
     </tr>`).join('');
 
   const statusRows = Object.entries(byStatus)
     .sort((a,b) => b[1].total - a[1].total)
     .map(([st, d]) => `
     <tr>
-      <td style="padding:7px 10px;border-bottom:1px solid #253470;width:40%;">${statusBadge(st)}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:center;color:#9aafd4;width:15%;font-variant-numeric:tabular-nums;">${d.count}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:right;color:#f4f4f4;width:25%;font-variant-numeric:tabular-nums;">${fmt(d.total)}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #253470;text-align:right;color:#607098;width:20%;font-variant-numeric:tabular-nums;font-size:12px;">${((d.total/grandTotal)*100).toFixed(1)}%</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #1e3260;width:40%;">${statusBadge(st)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #1e3260;text-align:center;color:#8fa3c8;width:15%;font-variant-numeric:tabular-nums;">${d.count}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #1e3260;text-align:right;color:#e8edf5;width:25%;font-variant-numeric:tabular-nums;">${fmt(d.total)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #1e3260;text-align:right;color:#5a7099;width:20%;font-variant-numeric:tabular-nums;font-size:12px;">${((d.total/grandTotal)*100).toFixed(1)}%</td>
     </tr>`).join('');
 
   const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background:#0e1733;font-family:'Segoe UI',Arial,sans-serif;">
+<body style="margin:0;padding:0;background:#0a1428;font-family:'Segoe UI',Arial,sans-serif;">
 <div style="max-width:700px;margin:0 auto;padding:24px 16px;">
 
-  <div style="background:#111b3e;border-top:4px solid #5b8db8;border-radius:8px;padding:20px 24px;margin-bottom:20px;">
-    <div style="font-size:11px;color:#607098;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">Nickerson Live</div>
-    <div style="font-size:22px;font-weight:700;color:#f4f4f4;">End of Day Sales Summary</div>
-    <div style="font-size:13px;color:#9aafd4;margin-top:4px;">${dayName}</div>
+  <div style="background:#0f1e38;border-top:4px solid #f0c60a;border-radius:8px;padding:20px 24px;margin-bottom:20px;">
+    <div style="font-size:11px;color:#5a7099;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">Nickerson Live</div>
+    <div style="font-size:22px;font-weight:700;color:#e8edf5;">End of Day Sales Summary</div>
+    <div style="font-size:13px;color:#8fa3c8;margin-top:4px;">${dayName}</div>
   </div>
 
   <div style="display:flex;gap:12px;margin-bottom:20px;">
-    <div style="flex:1;background:#182048;border:1px solid #253470;border-radius:8px;padding:16px 20px;">
-      <div style="font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.08em;">Total Orders</div>
-      <div style="font-size:28px;font-weight:700;color:#f4f4f4;margin-top:4px;">${orders.length}</div>
+    <div style="flex:1;background:#0f1e38;border:1px solid #1e3260;border-radius:8px;padding:16px 20px;">
+      <div style="font-size:11px;color:#5a7099;text-transform:uppercase;letter-spacing:0.08em;">Total Orders</div>
+      <div style="font-size:28px;font-weight:700;color:#e8edf5;margin-top:4px;">${orders.length}</div>
     </div>
-    <div style="flex:2;background:#182048;border:1px solid #5b8db8;border-radius:8px;padding:16px 20px;">
-      <div style="font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.08em;">Total Sales excl. VAT</div>
-      <div style="font-size:28px;font-weight:700;color:#5b8db8;margin-top:4px;">${fmt(grandTotal)}</div>
-      <div style="font-size:12px;color:${pctOfTarget >= 100 ? '#4ade80' : pctOfTarget >= 75 ? '#fbbf24' : '#f87171'};margin-top:6px;font-weight:600;">${pctOfTarget.toFixed(1)}% of ${fmt(DAILY_TARGET)} target</div>
+    <div style="flex:2;background:#0f1e38;border:1px solid #f0c60a;border-radius:8px;padding:16px 20px;">
+      <div style="font-size:11px;color:#5a7099;text-transform:uppercase;letter-spacing:0.08em;">Total Sales excl. VAT</div>
+      <div style="font-size:28px;font-weight:700;color:#f0c60a;margin-top:4px;">${fmt(grandTotal)}</div>
+      <div style="font-size:12px;color:${pctOfTarget >= 100 ? '#34d399' : pctOfTarget >= 75 ? '#fbbf24' : '#f87171'};margin-top:6px;font-weight:600;">${pctOfTarget.toFixed(1)}% of ${fmt(DAILY_TARGET)} target</div>
     </div>
   </div>
 
-  <div style="background:#182048;border:1px solid #253470;border-radius:8px;margin-bottom:20px;overflow:hidden;">
-    <div style="padding:14px 16px;border-bottom:1px solid #253470;font-size:13px;font-weight:600;color:#9aafd4;text-transform:uppercase;letter-spacing:0.06em;">Sales Orders</div>
+  <div style="background:#0f1e38;border:1px solid #1e3260;border-radius:8px;margin-bottom:20px;overflow:hidden;">
+    <div style="padding:14px 16px;border-bottom:1px solid #1e3260;font-size:13px;font-weight:600;color:#8fa3c8;text-transform:uppercase;letter-spacing:0.06em;">Sales Orders</div>
     <table style="width:100%;border-collapse:collapse;">
       <thead>
-        <tr style="background:#1e2a58;">
-          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;">Order No.</th>
-          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;">Customer</th>
-          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;">Amount excl. VAT</th>
-          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;">Status</th>
+        <tr style="background:#162444;">
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#5a7099;text-transform:uppercase;letter-spacing:0.06em;">Order No.</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#5a7099;text-transform:uppercase;letter-spacing:0.06em;">Customer</th>
+          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#5a7099;text-transform:uppercase;letter-spacing:0.06em;">Amount excl. VAT</th>
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#5a7099;text-transform:uppercase;letter-spacing:0.06em;">Status</th>
         </tr>
       </thead>
       <tbody>${orderRows}</tbody>
       <tfoot>
-        <tr style="background:#1e2a58;">
-          <td colspan="2" style="padding:10px 10px;font-weight:700;color:#f4f4f4;">Total (${orders.length} orders)</td>
-          <td style="padding:10px 10px;text-align:right;font-weight:700;color:#5b8db8;font-variant-numeric:tabular-nums;">${fmt(grandTotal)}</td>
+        <tr style="background:#162444;">
+          <td colspan="2" style="padding:10px 10px;font-weight:700;color:#e8edf5;">Total (${orders.length} orders)</td>
+          <td style="padding:10px 10px;text-align:right;font-weight:700;color:#f0c60a;font-variant-numeric:tabular-nums;">${fmt(grandTotal)}</td>
           <td></td>
         </tr>
       </tfoot>
     </table>
   </div>
 
-  <div style="background:#182048;border:1px solid #253470;border-radius:8px;margin-bottom:20px;overflow:hidden;">
-    <div style="padding:14px 16px;border-bottom:1px solid #253470;font-size:13px;font-weight:600;color:#9aafd4;text-transform:uppercase;letter-spacing:0.06em;">By Status</div>
+  <div style="background:#0f1e38;border:1px solid #1e3260;border-radius:8px;margin-bottom:20px;overflow:hidden;">
+    <div style="padding:14px 16px;border-bottom:1px solid #1e3260;font-size:13px;font-weight:600;color:#8fa3c8;text-transform:uppercase;letter-spacing:0.06em;">By Status</div>
     <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
       <thead>
-        <tr style="background:#1e2a58;">
-          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:40%;">Status</th>
-          <th style="padding:8px 10px;text-align:center;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:15%;">Orders</th>
-          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:25%;">Total excl. VAT</th>
-          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.06em;width:20%;">% of Total</th>
+        <tr style="background:#162444;">
+          <th style="padding:8px 10px;text-align:left;font-size:11px;color:#5a7099;text-transform:uppercase;letter-spacing:0.06em;width:40%;">Status</th>
+          <th style="padding:8px 10px;text-align:center;font-size:11px;color:#5a7099;text-transform:uppercase;letter-spacing:0.06em;width:15%;">Orders</th>
+          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#5a7099;text-transform:uppercase;letter-spacing:0.06em;width:25%;">Total excl. VAT</th>
+          <th style="padding:8px 10px;text-align:right;font-size:11px;color:#5a7099;text-transform:uppercase;letter-spacing:0.06em;width:20%;">% of Total</th>
         </tr>
       </thead>
       <tbody>${statusRows}</tbody>
     </table>
   </div>
 
-  <div style="font-size:11px;color:#607098;text-align:center;padding-top:8px;">
+  <div style="font-size:11px;color:#5a7099;text-align:center;padding-top:8px;">
     Generated automatically from Business Central · Nickerson Live
   </div>
 </div>
