@@ -10,6 +10,7 @@ const CLIENT   = '94cf8276-e615-4d6e-a825-fb71f5568b8b';
 const SECRET   = 'PCw8Q~JToVo-lSDikqEtwl4G7tXyDbBuYBsS5aab';
 const BC_ROOT  = `https://api.businesscentral.dynamics.com/v2.0/${TENANT}/Production/ODataV4/Company('Live%20Mouldshop')/`;
 const TO_EMAIL = 'matt@mouldshop.com';
+const DAILY_TARGET = 16678;
 
 async function getToken(scope) {
   const res = await fetch(`https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`, {
@@ -119,6 +120,8 @@ async function main() {
     bySalesperson[sp].total += amt;
   }
 
+  const pctOfTarget = (grandTotal / DAILY_TARGET) * 100;
+
   // --- Build HTML ---
   const orderRows = orders.map(o => `
     <tr>
@@ -166,6 +169,7 @@ async function main() {
     <div style="flex:2;background:#182048;border:1px solid #5b8db8;border-radius:8px;padding:16px 20px;">
       <div style="font-size:11px;color:#607098;text-transform:uppercase;letter-spacing:0.08em;">Total Sales excl. VAT</div>
       <div style="font-size:28px;font-weight:700;color:#5b8db8;margin-top:4px;">${fmt(grandTotal)}</div>
+      <div style="font-size:12px;color:${pctOfTarget >= 100 ? '#4ade80' : pctOfTarget >= 75 ? '#fbbf24' : '#f87171'};margin-top:6px;font-weight:600;">${pctOfTarget.toFixed(1)}% of ${fmt(DAILY_TARGET)} target</div>
     </div>
   </div>
 
