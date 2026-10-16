@@ -369,7 +369,7 @@ const SCOPE   = "https://api.businesscentral.dynamics.com/.default";
 const REDIRECT = location.origin + location.pathname;
 const REFRESH_MS = 10 * 60 * 1000;
 
-let accessToken = null, refreshTimer = null;
+let accessToken = null, refreshTimer = null, silentTimer = null;
 
 function getStoredToken() {
   try {
@@ -382,6 +382,40 @@ function getStoredToken() {
 }
 function storeToken(token, expiresIn) {
   try { sessionStorage.setItem("bc_token", JSON.stringify({ token, exp: Date.now() + (expiresIn - 60) * 1000 })); } catch {}
+  scheduleSilentRefresh(expiresIn);
+}
+function scheduleSilentRefresh(expiresIn) {
+  clearTimeout(silentTimer);
+  const refreshIn = Math.max((expiresIn - 300), 60) * 1000; // 5 min before expiry
+  silentTimer = setTimeout(silentRefresh, refreshIn);
+}
+async function silentRefresh() {
+  try {
+    const token = await new Promise((resolve, reject) => {
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      const params = new URLSearchParams({
+        client_id: CLIENT, response_type: "token",
+        redirect_uri: REDIRECT, scope: SCOPE,
+        prompt: "none", response_mode: "fragment"
+      });
+      iframe.src = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/authorize?${params}`;
+      const timer = setTimeout(() => { document.body.removeChild(iframe); reject(new Error("timeout")); }, 10000);
+      window.addEventListener("message", function handler(e) {
+        if (e.source !== iframe.contentWindow) return;
+        window.removeEventListener("message", handler);
+        clearTimeout(timer);
+        document.body.removeChild(iframe);
+        if (e.data && e.data.access_token) resolve(e.data);
+        else reject(new Error(e.data && e.data.error || "silent_fail"));
+      });
+      document.body.appendChild(iframe);
+    });
+    accessToken = token.access_token;
+    storeToken(token.access_token, token.expires_in || 3600);
+  } catch(e) {
+    // Silent refresh failed — token will expire; show connect button when next fetch fails
+  }
 }
 function b64url(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
