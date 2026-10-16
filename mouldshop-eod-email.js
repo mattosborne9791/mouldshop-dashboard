@@ -2,12 +2,19 @@
 // Mouldshop End-of-Day Sales Summary Email
 // Queries Business Central via client_credentials, sends HTML email via Microsoft Graph
 
-const { ProxyAgent, fetch } = require('undici');
-const dispatcher = new ProxyAgent(process.env.HTTPS_PROXY || 'http://127.0.0.1:40037');
+// Uses Node.js built-in fetch (Node 18+); HTTPS_PROXY is picked up automatically via the agent proxy.
 
-const TENANT   = 'f17044ae-2b66-4aa4-951b-38908b13d18b';
-const CLIENT   = '94cf8276-e615-4d6e-a825-fb71f5568b8b';
-const SECRET   = 'PCw8Q~JToVo-lSDikqEtwl4G7tXyDbBuYBsS5aab';
+require('dotenv').config();
+
+const TENANT = process.env.BC_TENANT;
+const CLIENT = process.env.BC_CLIENT_ID;
+const SECRET = process.env.BC_CLIENT_SECRET;
+
+if (!TENANT || !CLIENT || !SECRET) {
+  console.error('❌ Missing required environment variables: BC_TENANT, BC_CLIENT_ID, BC_CLIENT_SECRET');
+  process.exit(1);
+}
+
 const BC_ROOT  = `https://api.businesscentral.dynamics.com/v2.0/${TENANT}/Production/ODataV4/Company('Live%20Mouldshop')/`;
 const TO_EMAIL  = 'matt@mouldshop.com';
 const TO_EMAILS = [
@@ -28,7 +35,6 @@ async function getToken(scope) {
       client_secret: SECRET,
       scope
     }).toString(),
-    dispatcher
   });
   if (!res.ok) throw new Error(`Token error ${res.status}: ${await res.text()}`);
   return (await res.json()).access_token;
@@ -38,7 +44,6 @@ async function bcGet(token, entity, query) {
   const url = `${BC_ROOT}${entity}?${query}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    dispatcher
   });
   if (!res.ok) throw new Error(`BC error ${res.status} on ${entity}: ${await res.text()}`);
   return (await res.json()).value;
@@ -51,7 +56,6 @@ async function bcGetAll(token, entity, query) {
   while (url) {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-      dispatcher
     });
     if (!res.ok) throw new Error(`BC error ${res.status} on ${entity}: ${await res.text()}`);
     const json = await res.json();
@@ -263,7 +267,6 @@ async function main() {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload),
-    dispatcher
   });
 
   if (sendRes.status === 202) {
