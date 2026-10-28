@@ -96,7 +96,8 @@ tr:hover td { background: var(--surface2); }
 .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; background: var(--c); }
 
 .method { font-size: 12px; color: var(--fg3); line-height: 1.6; }
-.method summary { cursor: pointer; color: var(--fg2); font-weight: 600; }
+.method summary, .hidden-list summary { cursor: pointer; color: var(--fg2); font-weight: 600; }
+.hidden-list { margin-top: 14px; font-size: 13px; }
 .progress { font-size: 12px; color: var(--fg2); text-align: center; padding: 30px; }
 .footer { text-align: center; font-size: 11px; color: var(--fg3); padding: 8px 0 0; }
 
@@ -160,6 +161,14 @@ tr:hover td { background: var(--surface2); }
           <thead><tr><th>Received</th><th>Customer</th><th>Subject</th><th class="num">Waiting</th><th>Status</th></tr></thead>
           <tbody id="queue-body"></tbody>
         </table></div>
+        <details class="hidden-list">
+          <summary>Hidden as spam or not needing a reply <span class="badge" id="hidden-count">0</span></summary>
+          <div class="card-note" style="margin-top:8px">Left out of the waiting list and every figure: emails Microsoft flagged as spam, phishing or bulk mail, marketing emails, ones deleted without a reply, and ones with no reply after 24 business hours. Answered emails always count, however long they took.</div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Received</th><th>From</th><th>Subject</th><th>Why hidden</th></tr></thead>
+            <tbody id="hidden-body"></tbody>
+          </table></div>
+        </details>
       </div>
 
       <div class="two-col">
@@ -197,6 +206,7 @@ tr:hover td { background: var(--surface2); }
       <details class="method card">
         <summary>How this is measured</summary>
         <p>Customer emails are messages to sales@mouldshop.com from outside mouldshop.com, received in the selected period. Automated senders (no-reply, notifications, newsletters, live-chat alerts), auto-replies and out-of-office messages are left out, as are emails tagged “No reply needed” in Outlook.</p>
+        <p>Emails still waiting are also checked for spam: anything Microsoft’s filter rated as spam, phishing or bulk mail, marketing emails with an unsubscribe link, and anything deleted without a reply are hidden. An email with no reply after 24 business hours is treated as not needing one. Hidden emails are listed under the waiting list so they can be checked.</p>
         <p>The reply is the next email in the same conversation sent by anyone at Mouldshop to an outside address, from sales@ or a personal mailbox. If a customer sends several emails before anyone replies, the clock runs from the first. Replies from sales@ are credited to the name signed just above the “Sales Team” signature; otherwise they show as “Sales Team (unsigned)”.</p>
         <p>Time is counted in business hours only: Monday to Thursday 08:30–17:00 and Friday 08:30–16:00 UK time, excluding weekends and England &amp; Wales bank holidays. An email that arrives out of hours starts the clock at the next opening.</p>
         <p id="method-stats"></p>
@@ -221,7 +231,8 @@ const TOKEN_KEY = "graph_sales_token";
 const REFRESH_MS = 10 * 60 * 1000;
 const HISTORY_DAYS = 91;
 
-let accessToken = null, refreshTimer = null, turns = [], fetchedAt = null, days = 30;
+let accessToken = null, refreshTimer = null, turns = [], hidden = [], fetchedAt = null, days = 30;
+const headerCache = new Map();
 const $ = (id) => document.getElementById(id);
 
 /* ---------- sign-in (PKCE, same pattern as the main dashboard) ---------- */
@@ -314,16 +325,33 @@ async function fetchMessages() {
   const since = new Date(Date.now() - HISTORY_DAYS * 864e5).toISOString();
   const box = encodeURIComponent(MAILBOX);
   const junk = await graph(`/users/${box}/mailFolders/junkemail?$select=id`).then((f) => f.id).catch(() => null);
+  const bin = await graph(`/users/${box}/mailFolders/deleteditems?$select=id`).then((f) => f.id).catch(() => null);
   const select = "id,conversationId,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,isDraft,parentFolderId,categories,bodyPreview,webLink";
   let url = `/users/${box}/messages?$filter=receivedDateTime ge ${since}&$orderby=receivedDateTime desc&$select=${select}&$top=999`;
   const all = [];
   while (url) {
     const page = await graph(url);
-    for (const m of page.value || []) { m.isJunk = !!junk && m.parentFolderId === junk; all.push(m); }
+    for (const m of page.value || []) { m.isJunk = !!junk && m.parentFolderId === junk; m.isDeleted = !!bin && m.parentFolderId === bin; all.push(m); }
     $("loading").textContent = `Loading emails… ${all.length.toLocaleString("en-GB")} read`;
     url = page["@odata.nextLink"] || null;
   }
   return all;
+}
+
+/* For emails still waiting, read their hidden headers to spot spam, bulk and marketing mail */
+async function checkWaiting(all) {
+  const box = encodeURIComponent(MAILBOX);
+  const toCheck = all.filter((t) => !t.answered && !t.deleted && t.minutes <= S.CONFIG.staleMinutes && !headerCache.has(t.id)).slice(0, 300);
+  let i = 0;
+  const worker = async () => {
+    while (i < toCheck.length) {
+      const t = toCheck[i++];
+      const m = await graph(`/users/${box}/messages/${encodeURIComponent(t.id)}?$select=internetMessageHeaders`).catch(() => null);
+      headerCache.set(t.id, (m && m.internetMessageHeaders) || null);
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  for (const t of all) t.hiddenReason = S.spamReason(t, headerCache.get(t.id) || null);
 }
 
 async function load() {
@@ -332,8 +360,11 @@ async function load() {
   try {
     const msgs = await fetchMessages();
     fetchedAt = Date.now();
-    turns = S.buildTurns(msgs, fetchedAt);
-    $("method-stats").textContent = `Last load read ${msgs.length.toLocaleString("en-GB")} emails from the past ${HISTORY_DAYS} days and found ${turns.length.toLocaleString("en-GB")} customer emails needing a reply.`;
+    const all = S.buildTurns(msgs, fetchedAt);
+    await checkWaiting(all);
+    hidden = all.filter((t) => t.hiddenReason);
+    turns = all.filter((t) => !t.hiddenReason);
+    $("method-stats").textContent = `Last load read ${msgs.length.toLocaleString("en-GB")} emails from the past ${HISTORY_DAYS} days and found ${turns.length.toLocaleString("en-GB")} customer emails needing a reply (${hidden.length.toLocaleString("en-GB")} more hidden as spam or not needing a reply).`;
     $("loading").style.display = "none"; $("content").style.display = "flex";
     render();
     setStatus(true, "Live · updated " + timeFmt(fetchedAt));
@@ -395,6 +426,7 @@ function render() {
   }
 
   renderQueue(waiting);
+  renderHidden(hidden.filter((t) => t.receivedAt >= cutoff));
   const weeks = S.byWeek(turns).slice(-13);
   barChart($("chart-median"), weeks, (w) => w.median / 60, (v) => (v < 1 ? Math.round(v * 60) + "m" : v.toFixed(1) + "h"),
     S.CONFIG.slaMinutes / 60, (w) => `${nf(w.answered)} answered · avg ${dur(w.avg)}`, (w) => (w.median <= S.CONFIG.slaMinutes ? "var(--teal)" : "var(--bad)"));
@@ -413,6 +445,22 @@ function change(cur, before, lowerIsBetter) {
 function pctChange(cur, before) {
   const d = Math.round((cur - before) * 100);
   return d === 0 ? `same as previous ${days} days` : `${d > 0 ? "▲" : "▼"} ${Math.abs(d)} pts vs previous ${days} days`;
+}
+
+function renderHidden(rows) {
+  $("hidden-count").textContent = nf(rows.length);
+  const body = $("hidden-body"); body.replaceChildren();
+  if (!rows.length) { const tr = el("tr"); const td = el("td", "empty", "Nothing hidden in this period."); td.colSpan = 4; tr.append(td); body.append(tr); return; }
+  for (const t of [...rows].sort((a, b) => b.receivedAt - a.receivedAt)) {
+    const tr = el("tr");
+    tr.append(el("td", null, ukFmt.format(t.receivedAt)));
+    const who = el("td"); who.textContent = t.customer; who.title = t.customerEmail; tr.append(who);
+    const subj = el("td", "subj");
+    if (t.webLink) { const a = el("a", null, t.subject); a.href = t.webLink; a.target = "_blank"; a.rel = "noopener"; subj.append(a); } else subj.textContent = t.subject;
+    subj.title = t.subject; tr.append(subj);
+    tr.append(el("td", null, t.hiddenReason));
+    body.append(tr);
+  }
 }
 
 function renderQueue(waiting) {

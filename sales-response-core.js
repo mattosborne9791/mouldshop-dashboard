@@ -12,6 +12,8 @@
     ourDomain: "mouldshop.com",
     mailbox: "sales@mouldshop.com",
     slaMinutes: 120, // 2 business hours
+    // Unanswered after this many business minutes = treated as not needing a reply
+    staleMinutes: 24 * 60,
     timeZone: "Europe/London",
     // [open, close] in minutes after midnight, by JS weekday (0 = Sunday)
     hours: {
@@ -146,6 +148,7 @@
       preview: msg.bodyPreview || "",
       webLink: msg.webLink || "",
       skip: !!msg.isDraft || !!msg.isJunk,
+      deleted: !!msg.isDeleted,
     };
   }
 
@@ -223,6 +226,7 @@
       receivedWeekday: p.weekday,
       receivedHour: p.h,
       answered: !!reply,
+      deleted: !!inbound.deleted,
       repliedAt: reply ? reply.at : null,
       responder: reply ? responderOf(reply) : null,
       minutes, // business minutes to reply, or waiting so far
@@ -295,9 +299,37 @@
     return out;
   }
 
+  /*
+   * Why an unanswered email is probably not a real customer waiting on us.
+   * `headers` is Graph's internetMessageHeaders for that email (or null).
+   * Returns a short reason, or null if it looks genuine.
+   */
+  function spamReason(turn, headers) {
+    if (turn.answered) return null;
+    if (turn.deleted) return "Deleted without a reply";
+    if (turn.minutes > CONFIG.staleMinutes) return "No reply after 24 business hours";
+    if (!headers || !headers.length) return null;
+    const h = {};
+    for (const { name, value } of headers) h[lower(name)] = (h[lower(name)] ? h[lower(name)] + "; " : "") + (value || "");
+    const afr = h["x-forefront-antispam-report"] || "";
+    const msa = h["x-microsoft-antispam"] || "";
+    const field = (src, key) => { const m = new RegExp("(?:^|;)\\s*" + key + ":\\s*([^;\\s]+)", "i").exec(src); return m ? m[1].toUpperCase() : ""; };
+    const sfv = field(afr, "SFV"), cat = field(afr, "CAT");
+    const scl = Number(field(afr, "SCL") || h["x-ms-exchange-organization-scl"] || NaN);
+    const bcl = Number(field(msa, "BCL") || field(afr, "BCL") || NaN);
+    if (/^(PHSH|HPHSH|HPHISH|SPOOF)$/.test(cat)) return "Flagged as phishing by Microsoft";
+    if (sfv === "SPM" || sfv === "BLK" || /^(SPM|HSPM)$/.test(cat) || scl >= 5) return "Flagged as spam by Microsoft";
+    if (cat === "BULK" || bcl >= 7) return "Bulk email (Microsoft rating)";
+    if (h["list-unsubscribe"] || h["list-id"]) return "Marketing email (has unsubscribe link)";
+    if (/^(bulk|list|junk)$/i.test((h["precedence"] || "").trim())) return "Bulk email";
+    const auto = lower(h["auto-submitted"]);
+    if (auto && auto !== "no") return "Automated email";
+    return null;
+  }
+
   const api = {
     CONFIG, londonParts, londonToUtc, businessMinutes, addBusinessMinutes,
-    normalise, isCustomerEmail, isReply, responderOf, buildTurns,
+    normalise, isCustomerEmail, spamReason, isReply, responderOf, buildTurns,
     summarise, byWeek, byResponder, byDayHour, median, mean, weekKey,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
