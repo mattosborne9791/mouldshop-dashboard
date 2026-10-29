@@ -321,7 +321,7 @@ tr:hover td { background: var(--surface2); }
         <div class="kpi kpi-accent-teal" style="align-items:stretch">
           <div class="kpi-label" style="text-align:center">Pipeline Invoice Value</div>
           <div class="kpi-value" id="kpi-pipeline" style="color:var(--teal);text-align:center">—</div>
-          <div class="kpi-sub" style="text-align:center">outstanding order value, excl. VAT</div>
+          <div class="kpi-sub" id="kpi-pipeline-sub" style="text-align:center">outstanding order value, excl. VAT</div>
           <div class="sparkline-wrap" id="sparkline-wrap" style="display:none">
             <div class="sparkline-bars" id="sparkline-bars"></div>
             <div class="spark-labels" id="sparkline-labels"></div>
@@ -504,6 +504,20 @@ function statusTag(s) {
   return `<span class="tag tag-neu">${s}</span>`;
 }
 
+// Convert a sales line's Outstanding Amount (LCY), which includes VAT, to excl. VAT using the line's own VAT rate
+const findKey = (row, re) => Object.keys(row).find(k => re.test(k));
+function lineExVat(r) {
+  const out = Number(r.outstandingAmountLcy || 0);
+  const vatKey = findKey(r, /^vat_?(percent|pct|%)$/i);
+  if (vatKey != null && r[vatKey] !== "" && r[vatKey] != null && isFinite(Number(r[vatKey]))) {
+    return { value: out / (1 + Number(r[vatKey]) / 100), ok: true };
+  }
+  const inclKey = findKey(r, /^amount_?including_?vat$/i);
+  const amt = Number(r.amount), incl = inclKey ? Number(r[inclKey]) : NaN;
+  if (isFinite(amt) && isFinite(incl) && incl !== 0) return { value: out * (amt / incl), ok: true };
+  return { value: out, ok: false };
+}
+
 async function fetchAll() {
   const dbg = document.getElementById("entity-debug");
   dbg.textContent = "Live Mouldshop · fetching data…";
@@ -625,14 +639,19 @@ async function fetchAll() {
       }
     } catch(e) { console.warn("SNI fetch failed:", e.message); }
 
-    // Pipeline
-    let pipelineTotal = 0;
+    // Pipeline — BC's Outstanding Amount (LCY) INCLUDES VAT, so each line is converted to excl. VAT
+    // using its own VAT rate (same method as pipeline.html, so the two pages agree)
+    let pipelineTotal = 0, pipelineVatUnknown = 0;
     try {
       let skip = 0;
       while (true) {
-        const page = await bcGet("salesDocumentLines", "$select=documentNumber,documentType,outstandingAmountLcy&$filter=documentType%20eq%20%27Order%27%20and%20outstandingAmountLcy%20gt%200&$top=200&$skip=" + skip).catch(() => ({value:[]}));
+        const page = await bcGet("salesDocumentLines", "$filter=documentType%20eq%20%27Order%27%20and%20outstandingAmountLcy%20gt%200&$top=200&$skip=" + skip).catch(() => ({value:[]}));
         const rows = page.value || [];
-        rows.forEach(r => { pipelineTotal += Number(r.outstandingAmountLcy || 0); });
+        rows.forEach(r => {
+          const { value, ok } = lineExVat(r);
+          if (!ok) pipelineVatUnknown++;
+          pipelineTotal += value;
+        });
         if (rows.length < 200) break;
         skip += 200;
         if (skip > 10000) break;
@@ -685,6 +704,8 @@ async function fetchAll() {
     if (sniEl) { sniEl.textContent = gbp(sniTotal); }
     const pipeEl = document.getElementById("kpi-pipeline");
     if (pipeEl) { pipeEl.textContent = gbp(pipelineTotal); }
+    const pipeSub = document.getElementById("kpi-pipeline-sub");
+    if (pipeSub) { pipeSub.textContent = pipelineVatUnknown ? "outstanding order value, some lines incl. VAT" : "outstanding order value, excl. VAT"; }
 
     document.getElementById("footer-ts").textContent = "Last updated: " + new Date().toLocaleString("en-GB") + " · Auto-refreshes every 10 min";
     dbg.textContent = "Live Mouldshop · " + soOrders.length + " sales orders · " + (poRes.value||[]).length + " purchase orders";
