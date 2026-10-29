@@ -19,6 +19,8 @@
   --accent:   #5b8db8;
   --accent2:  #1a2654;
   --accentfg: #f4f4f4;
+  --good:     #4ade80;
+  --goodbg:   #0c3a2a;
   --bad:      #f87171;
   --badbg:    #2d0808;
   --teal:     #38bdf8;
@@ -94,6 +96,9 @@ tbody tr:hover td { background: var(--surface2); }
 .ship { white-space: nowrap; }
 .s { display: none; }
 .ship.late { color: var(--bad); }
+tbody tr.today td { background: var(--goodbg); color: var(--good); }
+tbody tr.today td:first-child { box-shadow: inset 4px 0 0 var(--good); }
+tbody tr.today:hover td { background: #104a35; }
 .cust { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 td.mono, td.num { white-space: nowrap; }
 .empty { text-align: center; color: var(--fg3); padding: 24px; }
@@ -189,7 +194,7 @@ const CLIENT  = "94cf8276-e615-4d6e-a825-fb71f5568b8b";
 const BC_ROOT = "https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/";
 const SCOPE   = "https://api.businesscentral.dynamics.com/.default";
 const REDIRECT = location.origin + location.pathname;
-const REFRESH_MS = 10 * 60 * 1000;
+const REFRESH_MS = 15 * 60 * 1000;
 
 const COMPANIES = [
   { key: "ms", name: "Mouldshop", company: "Live Mouldshop" },
@@ -323,11 +328,13 @@ const odataStr = s => encodeURIComponent(String(s).replace(/'/g, "''"));
 
 class TokenExpired extends Error {}
 
+const todayIso = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); };
+
 // Shipment date: BC uses 0001-01-01 for "not set"; dates before today are shown in red as late.
 function shipCell(d) {
   const iso = (d || "").slice(0, 10);
   if (!iso || iso <= "0001-01-01") return '<td class="ship">—</td>';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   const dt = new Date(iso + "T00:00:00");
   const label = `<span class="l">${dt.toLocaleDateString("en-GB", {day:"2-digit", month:"short", year:"numeric"})}</span>`
               + `<span class="s">${dt.toLocaleDateString("en-GB", {day:"2-digit", month:"2-digit", year:"2-digit"})}</span>`;
@@ -399,7 +406,7 @@ function render(key, rows) {
   document.getElementById(key + "-total").textContent = gbp(total);
   document.getElementById(key + "-count").textContent = rows.length + (rows.length === 1 ? " open order" : " open orders") + " · excl. VAT";
   document.getElementById(key + "-body").innerHTML = rows.length
-    ? rows.map(r => `<tr>
+    ? rows.map(r => `<tr${(r.shipDate || "").slice(0, 10) === todayIso() ? ' class="today" title="Due to ship today"' : ""}>
         <td class="mono">${esc(r.no)}</td>
         <td class="cust" title="${esc(r.customer)}">${esc(r.customer)}</td>
         ${shipCell(r.shipDate)}
@@ -435,7 +442,7 @@ async function fetchAll() {
     else { console.error(c.name, r.reason); renderError(c.key, r.reason.message); }
   });
 
-  document.getElementById("footer-ts").textContent = "Last updated: " + new Date().toLocaleString("en-GB") + " · Auto-refreshes every 10 min";
+  document.getElementById("footer-ts").textContent = "Last updated: " + new Date().toLocaleString("en-GB") + " · Auto-refreshes every 15 min";
   setStatus(ok === COMPANIES.length ? "live" : "grey", ok === COMPANIES.length ? "Live" : "Partial data — see tables");
 }
 
