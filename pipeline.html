@@ -82,6 +82,11 @@ body { font-family: var(--ui); font-size: 14px; background: var(--bg); color: va
 }
 .company-name { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
 .company-sub { font-size: 12px; color: var(--fg3); margin-top: 4px; }
+.company-flags { font-size: 12px; font-weight: 600; margin-top: 3px; }
+.company-flags:empty { display: none; }
+.flag-late { color: var(--bad); }
+.flag-today { color: var(--good); }
+.flag-sep { color: var(--fg3); margin: 0 6px; }
 .company-value { font-family: var(--mono); font-size: 26px; font-weight: 500; color: var(--teal); font-variant-numeric: tabular-nums; }
 
 .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
@@ -113,7 +118,12 @@ td.mono, td.num { white-space: nowrap; }
   .header-right .btn { padding: 6px 10px; font-size: 12px; }
   .status-pill { display: none; }
   .main { padding: 14px 16px; }
-  .company-value { font-size: 22px; }
+  .company-flags { font-size: 12px; font-weight: 600; margin-top: 3px; }
+.company-flags:empty { display: none; }
+.flag-late { color: var(--bad); }
+.flag-today { color: var(--good); }
+.flag-sep { color: var(--fg3); margin: 0 6px; }
+.company-value { font-size: 22px; }
   th, td { padding: 9px 10px; }
   th { font-size: 10px; }
   .l { display: none; }
@@ -164,6 +174,7 @@ td.mono, td.num { white-space: nowrap; }
           <div>
             <div class="company-name">Mouldshop</div>
             <div class="company-sub" id="ms-count">—</div>
+            <div class="company-flags" id="ms-flags"></div>
           </div>
           <div class="company-value" id="ms-total">—</div>
         </div>
@@ -178,6 +189,7 @@ td.mono, td.num { white-space: nowrap; }
           <div>
             <div class="company-name">Nickerson</div>
             <div class="company-sub" id="nk-count">—</div>
+            <div class="company-flags" id="nk-flags"></div>
           </div>
           <div class="company-value" id="nk-total">—</div>
         </div>
@@ -368,25 +380,44 @@ async function bcGet(company, entity, params) {
 }
 
 /* ---------- Data ---------- */
-// Same source as the "Pipeline Invoice Value" tile on the main dashboard:
-// sales order lines with outstandingAmountLcy > 0, summed per order (excl. VAT, GBP).
+// Lines on open sales orders with value still to invoice (outstandingAmountLcy > 0), summed per order.
+// BC's Outstanding Amount (LCY) INCLUDES VAT, so each line is converted to excl. VAT using that
+// line's own VAT rate (VAT % field, or the ratio of its Amount to Amount Including VAT).
+const findKey = (row, re) => Object.keys(row).find(k => re.test(k));
+function lineExVat(r) {
+  const out = Number(r.outstandingAmountLcy || 0);
+  const vatKey = findKey(r, /^vat_?(percent|pct|%)$/i);
+  if (vatKey != null && r[vatKey] !== "" && r[vatKey] != null && isFinite(Number(r[vatKey]))) {
+    return { value: out / (1 + Number(r[vatKey]) / 100), ok: true };
+  }
+  const inclKey = findKey(r, /^amount_?including_?vat$/i);
+  const amt = Number(r.amount), incl = inclKey ? Number(r[inclKey]) : NaN;
+  if (isFinite(amt) && isFinite(incl) && incl !== 0) return { value: out * (amt / incl), ok: true };
+  return { value: out, ok: false };
+}
+
 async function loadPipeline(company) {
   const byOrder = new Map();
+  let vatUnknown = 0;
   const PAGE = 200;
   let skip = 0;
   while (true) {
+    // No $select: the VAT field names on this web service aren't fixed, so read the whole line and detect them
     const page = await bcGet(company, "salesDocumentLines",
-      "$select=documentNumber,outstandingAmountLcy&$filter=documentType%20eq%20%27Order%27%20and%20outstandingAmountLcy%20gt%200&$top=" + PAGE + "&$skip=" + skip);
+      "$filter=documentType%20eq%20%27Order%27%20and%20outstandingAmountLcy%20gt%200&$top=" + PAGE + "&$skip=" + skip);
     const rows = page.value || [];
     rows.forEach(r => {
       const no = (r.documentNumber || "").trim();
       if (!no) return;
-      byOrder.set(no, (byOrder.get(no) || 0) + Number(r.outstandingAmountLcy || 0));
+      const { value, ok } = lineExVat(r);
+      if (!ok) vatUnknown++;
+      byOrder.set(no, (byOrder.get(no) || 0) + value);
     });
     if (rows.length < PAGE) break;
     skip += PAGE;
     if (skip > 100000) break;
   }
+  if (vatUnknown) console.warn(company + ": VAT rate not found on " + vatUnknown + " line(s); those values still include VAT");
 
   // Customer names from the order headers, looked up in small batches
   const nos = [...byOrder.keys()];
@@ -409,15 +440,27 @@ async function loadPipeline(company) {
     }
   }));
 
-  return nos
+  const rows = nos
     .map(no => ({ no, customer: customers[no] || "—", shipDate: shipDates[no], value: byOrder.get(no) }))
     .sort((a, b) => b.value - a.value);
+  return { rows, vatUnknown };
 }
 
-function render(key, rows) {
+function render(key, data) {
+  const rows = data.rows;
   const total = rows.reduce((s, r) => s + r.value, 0);
   document.getElementById(key + "-total").textContent = gbp(total);
-  document.getElementById(key + "-count").textContent = rows.length + (rows.length === 1 ? " open order" : " open orders") + " · excl. VAT";
+  document.getElementById(key + "-count").textContent = rows.length + (rows.length === 1 ? " open order" : " open orders")
+    + (data.vatUnknown ? " · some values incl. VAT" : " · excl. VAT");
+  const today = todayIso();
+  let overdue = 0, dueToday = 0;
+  rows.forEach(r => {
+    const iso = (r.shipDate || "").slice(0, 10);
+    if (!iso || iso <= "0001-01-01") return;
+    if (iso === today) dueToday++; else if (iso < today) overdue++;
+  });
+  document.getElementById(key + "-flags").innerHTML =
+    `<span class="flag-late">${overdue} overdue</span><span class="flag-sep">·</span><span class="flag-today">${dueToday} due to leave today</span>`;
   document.getElementById(key + "-body").innerHTML = rows.length
     ? rows.map(r => `<tr${rowState(r.shipDate)}>
         <td class="mono">${esc(r.no)}</td>
@@ -429,6 +472,7 @@ function render(key, rows) {
 function renderError(key, msg) {
   document.getElementById(key + "-total").textContent = "—";
   document.getElementById(key + "-count").textContent = "Could not load";
+  document.getElementById(key + "-flags").innerHTML = "";
   document.getElementById(key + "-body").innerHTML = `<tr><td colspan="4" class="err">${esc(msg)}</td></tr>`;
 }
 
