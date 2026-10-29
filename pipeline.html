@@ -22,7 +22,7 @@
   --good:     #4ade80;
   --goodbg:   #0c3a2a;
   --bad:      #f87171;
-  --badbg:    #2d0808;
+  --badbg:    #3a1214;
   --teal:     #38bdf8;
   --mono:     "JetBrains Mono", monospace;
   --ui:       "Inter", system-ui, sans-serif;
@@ -99,6 +99,9 @@ tbody tr:hover td { background: var(--surface2); }
 tbody tr.today td { background: var(--goodbg); color: var(--good); }
 tbody tr.today td:first-child { box-shadow: inset 4px 0 0 var(--good); }
 tbody tr.today:hover td { background: #104a35; }
+tbody tr.late td { background: var(--badbg); color: var(--bad); }
+tbody tr.late td:first-child { box-shadow: inset 4px 0 0 var(--bad); }
+tbody tr.late:hover td { background: #4a171a; }
 .cust { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 td.mono, td.num { white-space: nowrap; }
 .empty { text-align: center; color: var(--fg3); padding: 24px; }
@@ -330,6 +333,16 @@ class TokenExpired extends Error {}
 
 const todayIso = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); };
 
+// Whole-row highlight: green if due to ship today, red if the shipment date has passed
+function rowState(d) {
+  const iso = (d || "").slice(0, 10);
+  if (!iso || iso <= "0001-01-01") return "";
+  const today = todayIso();
+  if (iso === today) return ' class="today" title="Due to ship today"';
+  if (iso < today) return ' class="late" title="Overdue — past shipment date"';
+  return "";
+}
+
 // Shipment date: BC uses 0001-01-01 for "not set"; dates before today are shown in red as late.
 function shipCell(d) {
   const iso = (d || "").slice(0, 10);
@@ -406,7 +419,7 @@ function render(key, rows) {
   document.getElementById(key + "-total").textContent = gbp(total);
   document.getElementById(key + "-count").textContent = rows.length + (rows.length === 1 ? " open order" : " open orders") + " · excl. VAT";
   document.getElementById(key + "-body").innerHTML = rows.length
-    ? rows.map(r => `<tr${(r.shipDate || "").slice(0, 10) === todayIso() ? ' class="today" title="Due to ship today"' : ""}>
+    ? rows.map(r => `<tr${rowState(r.shipDate)}>
         <td class="mono">${esc(r.no)}</td>
         <td class="cust" title="${esc(r.customer)}">${esc(r.customer)}</td>
         ${shipCell(r.shipDate)}
