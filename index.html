@@ -518,6 +518,60 @@ function lineExVat(r) {
   return { value: out, ok: false };
 }
 
+// Overdue supplier POs: only count a PO if it still has something outstanding to receive on a line
+// that is NOT a G/L Account line. POs whose only outstanding lines are G/L Account (carriage, charges etc.)
+// are treated as fully booked in. If the lines can't be read for a PO, it is kept (fails safe).
+const PO_LINE_SOURCES = [
+  { entity: "purchaseDocumentLines",   docField: "documentNumber" },
+  { entity: "PurchaseOrderPurchLines", docField: "Document_No" },
+];
+function poLineOutstanding(l) {
+  const typeKey = findKey(l, /^(line_?)?type$/i);
+  const type = typeKey ? String(l[typeKey] || "").trim() : null;
+  if (type === null) return null;                                   // can't tell the line type
+  if (!type || /g\/?_?l|account|comment/i.test(type)) return 0;     // G/L Account or comment line: ignore
+  const outKey = findKey(l, /^outstanding_?(quantity|qty)$/i);
+  if (outKey) return Number(l[outKey] || 0);
+  const qKey = findKey(l, /^quantity$/i), rKey = findKey(l, /^(quantity_?received|received_?quantity)$/i);
+  if (qKey && rKey) return Number(l[qKey] || 0) - Number(l[rKey] || 0);
+  return null;                                                      // can't tell what's outstanding
+}
+async function filterPOsWithOutstandingLines(bcGet, pos) {
+  const nos = [...new Set(pos.map(p => (p.number || "").trim()).filter(Boolean))];
+  if (!nos.length) return [];
+  const keep = new Set(), seen = new Set();
+  let source = null;
+  const BATCH = 15;
+  for (let i = 0; i < nos.length; i += BATCH) {
+    const batch = nos.slice(i, i + BATCH);
+    let lines = null;
+    for (const src of (source ? [source] : PO_LINE_SOURCES)) {
+      const filter = batch.map(n => src.docField + "%20eq%20%27" + encodeURIComponent(n.replace(/'/g, "''")) + "%27").join("%20or%20");
+      try {
+        const res = await bcGet(src.entity, "$filter=" + filter + "&$top=1000");
+        lines = { src, rows: res.value || [] };
+        source = src;
+        break;
+      } catch (e) {
+        if (e.message === "Token expired") throw e;
+        console.warn("PO lines via " + src.entity + " failed:", e.message);
+      }
+    }
+    if (!lines) { batch.forEach(n => keep.add(n)); continue; }      // couldn't read lines: keep these POs
+    const unknown = new Set();
+    lines.rows.forEach(l => {
+      const no = String(l[lines.src.docField] || "").trim();
+      seen.add(no);
+      const out = poLineOutstanding(l);
+      if (out === null) unknown.add(no);
+      else if (out > 0) keep.add(no);
+    });
+    unknown.forEach(n => keep.add(n));
+    batch.forEach(n => { if (!seen.has(n)) keep.add(n); });         // no lines returned: keep
+  }
+  return pos.filter(p => keep.has((p.number || "").trim()));
+}
+
 async function fetchAll() {
   const dbg = document.getElementById("entity-debug");
   dbg.textContent = "Live Mouldshop · fetching data…";
@@ -571,7 +625,8 @@ async function fetchAll() {
     const lateEl = document.getElementById("kpi-late");
     if (lateEl) { lateEl.textContent = num((lateRes.value || []).length); }
     const poOverdueEl = document.getElementById("kpi-po-overdue");
-    if (poOverdueEl) { poOverdueEl.textContent = num((poOverdueRes.value || []).length); }
+    const poOverdueOutstanding = await filterPOsWithOutstandingLines(bcGet, poOverdueRes.value || []);
+    if (poOverdueEl) { poOverdueEl.textContent = num(poOverdueOutstanding.length); }
     const dueShipEl = document.getElementById("kpi-due-ship");
     if (dueShipEl) { dueShipEl.textContent = num((dueShipRes.value || []).length); }
 
