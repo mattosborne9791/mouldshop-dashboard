@@ -243,7 +243,7 @@ function scheduleSilentRefresh(expiresIn) {
 async function silentRefresh() {
   try {
     const stored = JSON.parse(localStorage.getItem("bc_token") || "{}");
-    if (!stored.refresh) return;
+    if (!stored.refresh) { startAuth(); return; }
     const res = await fetch(`https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -253,8 +253,15 @@ async function silentRefresh() {
     if (data.access_token) {
       accessToken = data.access_token;
       storeToken(data.access_token, data.refresh_token || stored.refresh, data.expires_in || 3600);
+    } else {
+      // Refresh token rejected (expired or revoked) — clear and re-authenticate
+      try { localStorage.removeItem("bc_token"); } catch {}
+      startAuth();
     }
-  } catch(e) { /* try again at next interval */ }
+  } catch(e) {
+    // Network error — retry in 60 seconds
+    silentTimer = setTimeout(silentRefresh, 60000);
+  }
 }
 function b64url(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
