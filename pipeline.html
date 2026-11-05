@@ -21,6 +21,8 @@
   --accentfg: #f4f4f4;
   --good:     #4ade80;
   --goodbg:   #0c3a2a;
+  --warn:     #fb923c;
+  --warnbg:   #3a2008;
   --bad:      #f87171;
   --badbg:    #3a1214;
   --teal:     #38bdf8;
@@ -86,6 +88,7 @@ body { font-family: var(--ui); font-size: 14px; background: var(--bg); color: va
 .company-flags:empty { display: none; }
 .flag-late { color: var(--bad); }
 .flag-today { color: var(--good); }
+.flag-prepay { color: var(--warn); }
 .flag-sep { color: var(--fg3); margin: 0 6px; }
 .company-value { font-family: var(--mono); font-size: 26px; font-weight: 500; color: var(--teal); font-variant-numeric: tabular-nums; }
 
@@ -107,6 +110,9 @@ tbody tr.today:hover td { background: #104a35; }
 tbody tr.late td { background: var(--badbg); color: var(--bad); }
 tbody tr.late td:first-child { box-shadow: inset 4px 0 0 var(--bad); }
 tbody tr.late:hover td { background: #4a171a; }
+tbody tr.prepay td, tbody tr.prepay td.ship.late { background: var(--warnbg); color: var(--warn); }
+tbody tr.prepay td:first-child { box-shadow: inset 4px 0 0 var(--warn); }
+tbody tr.prepay:hover td { background: #4a2a0c; }
 .cust { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 td.mono, td.num { white-space: nowrap; }
 .empty { text-align: center; color: var(--fg3); padding: 24px; }
@@ -122,6 +128,7 @@ td.mono, td.num { white-space: nowrap; }
 .company-flags:empty { display: none; }
 .flag-late { color: var(--bad); }
 .flag-today { color: var(--good); }
+.flag-prepay { color: var(--warn); }
 .flag-sep { color: var(--fg3); margin: 0 6px; }
 .company-value { font-size: 22px; }
   th, td { padding: 9px 10px; }
@@ -352,8 +359,12 @@ class TokenExpired extends Error {}
 
 const todayIso = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); };
 
-// Whole-row highlight: green if due to ship today, red if the shipment date has passed
-function rowState(d) {
+const isPrepay = s => /pending\s*_?prepayment/i.test(String(s || ""));
+
+// Whole-row highlight: orange if Pending Prepayment (takes priority), green if due to ship today,
+// red if the shipment date has passed
+function rowState(d, status) {
+  if (isPrepay(status)) return ' class="prepay" title="Pending Prepayment"';
   const iso = (d || "").slice(0, 10);
   if (!iso || iso <= "0001-01-01") return "";
   const today = todayIso();
@@ -428,18 +439,19 @@ async function loadPipeline(company) {
 
   // Customer names from the order headers, looked up in small batches
   const nos = [...byOrder.keys()];
-  const customers = {}, shipDates = {};
+  const customers = {}, shipDates = {}, statuses = {};
   const BATCH = 15;
   const batches = [];
   for (let i = 0; i < nos.length; i += BATCH) batches.push(nos.slice(i, i + BATCH));
   await Promise.all(batches.map(async b => {
     const filter = b.map(n => "No%20eq%20%27" + odataStr(n) + "%27").join("%20or%20");
     try {
-      const res = await bcGet(company, "SalesOrder", "$select=No,Sell_to_Customer_Name,Shipment_Date&$filter=" + filter + "&$top=" + BATCH);
+      const res = await bcGet(company, "SalesOrder", "$select=No,Sell_to_Customer_Name,Shipment_Date,Status&$filter=" + filter + "&$top=" + BATCH);
       (res.value || []).forEach(o => {
         const no = (o.No || "").trim();
         customers[no] = o.Sell_to_Customer_Name;
         shipDates[no] = o.Shipment_Date;
+        statuses[no] = o.Status;
       });
     } catch(e) {
       if (e instanceof TokenExpired) throw e;
@@ -448,7 +460,7 @@ async function loadPipeline(company) {
   }));
 
   const rows = nos
-    .map(no => ({ no, customer: customers[no] || "—", shipDate: shipDates[no], value: byOrder.get(no) }))
+    .map(no => ({ no, customer: customers[no] || "—", shipDate: shipDates[no], status: statuses[no], value: byOrder.get(no) }))
     .sort((a, b) => b.value - a.value);
   return { rows, vatUnknown };
 }
@@ -460,16 +472,18 @@ function render(key, data) {
   document.getElementById(key + "-count").textContent = rows.length + (rows.length === 1 ? " open order" : " open orders")
     + (data.vatUnknown ? " · some values incl. VAT" : " · excl. VAT");
   const today = todayIso();
-  let overdue = 0, dueToday = 0;
+  let overdue = 0, dueToday = 0, prepay = 0;
   rows.forEach(r => {
+    if (isPrepay(r.status)) { prepay++; return; }
     const iso = (r.shipDate || "").slice(0, 10);
     if (!iso || iso <= "0001-01-01") return;
     if (iso === today) dueToday++; else if (iso < today) overdue++;
   });
   document.getElementById(key + "-flags").innerHTML =
-    `<span class="flag-late">${overdue} overdue</span><span class="flag-sep">·</span><span class="flag-today">${dueToday} due to leave today</span>`;
+    `<span class="flag-late">${overdue} overdue</span><span class="flag-sep">·</span><span class="flag-today">${dueToday} due to leave today</span>`
+    + `<span class="flag-sep">·</span><span class="flag-prepay">${prepay} pending prepayment</span>`;
   document.getElementById(key + "-body").innerHTML = rows.length
-    ? rows.map(r => `<tr${rowState(r.shipDate)}>
+    ? rows.map(r => `<tr${rowState(r.shipDate, r.status)}>
         <td class="mono">${esc(r.no)}</td>
         <td class="cust" title="${esc(r.customer)}">${esc(r.customer)}</td>
         ${shipCell(r.shipDate)}
