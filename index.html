@@ -150,6 +150,7 @@ td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--fg
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: var(--surface2); }
 .mono { font-family: var(--mono); font-size: 12px; }
+.fx { display: block; font-size: 10px; color: var(--fg3); font-family: var(--mono); white-space: nowrap; }
 .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
 .tag-good { background: var(--goodbg); color: var(--good); }
 .tag-warn { background: var(--warnbg); color: var(--warn); }
@@ -224,7 +225,7 @@ tr:hover td { background: var(--surface2); }
       <div class="kpi">
         <div class="kpi-label">Sales Order Value</div>
         <div class="kpi-value" id="kpi-sov">—</div>
-        <div class="kpi-sub">today, excl. VAT</div>
+        <div class="kpi-sub" id="kpi-sov-sub">today, excl. VAT</div>
       </div>
       <div class="kpi-gauge">
         <div class="kpi-label">Daily Target</div>
@@ -311,7 +312,7 @@ tr:hover td { background: var(--surface2); }
         <div class="kpi kpi-accent-bad">
           <div class="kpi-label">Overdue Debtors</div>
           <div class="kpi-value" id="kpi-overdue" style="color:var(--bad)">—</div>
-          <div class="kpi-sub">GBP, overdue balance</div>
+          <div class="kpi-sub" id="kpi-overdue-sub">GBP, overdue balance</div>
         </div>
         <div class="kpi kpi-accent-warn">
           <div class="kpi-label">Shipped Not Invoiced</div>
@@ -365,6 +366,9 @@ const TENANT  = "f17044ae-2b66-4aa4-951b-38908b13d18b";
 const CLIENT  = "94cf8276-e615-4d6e-a825-fb71f5568b8b";
 const BC_ROOT = "https://api.businesscentral.dynamics.com/v2.0/f17044ae-2b66-4aa4-951b-38908b13d18b/Production/ODataV4/";
 const BC_CO   = "company=Live%20Mouldshop";
+// Standard Business Central API (same sign-in): exchange rates and document currency codes
+const BC_API  = "https://api.businesscentral.dynamics.com/v2.0/" + TENANT + "/Production/api/v2.0/companies(64831692-9eaf-ec11-8aa5-0022481b4e2d)/";
+const LCY     = "GBP";
 const SCOPE   = "https://api.businesscentral.dynamics.com/.default";
 const REDIRECT = location.origin + location.pathname;
 const REFRESH_MS = 10 * 60 * 1000;
@@ -577,6 +581,8 @@ function showError(msg) {
 }
 
 const gbp  = v => "£" + Number(v||0).toLocaleString("en-GB", {minimumFractionDigits:2, maximumFractionDigits:2});
+// Original amount shown under a converted one, e.g. "EUR 1,234.00"
+const fxNote = x => x && x.cur ? `<span class="fx">${x.cur} ${Number(x.amt||0).toLocaleString("en-GB", {minimumFractionDigits:2, maximumFractionDigits:2})}${x.ok ? "" : " · no rate"}</span>` : "";
 const num  = v => Number(v||0).toLocaleString("en-GB");
 const fmtd = s => s ? new Date(s).toLocaleDateString("en-GB", {day:"2-digit",month:"short",year:"numeric"}) : "—";
 const fmtShort = s => s ? new Date(s).toLocaleDateString("en-GB", {day:"2-digit",month:"short"}) : "";
@@ -662,20 +668,21 @@ async function fetchAll() {
   dbg.textContent = "Live Mouldshop · fetching data…";
   setStatus("grey", "Refreshing…");
 
-  const bcGet = async (entity, params, retried) => {
-    const url = BC_ROOT + entity + "?" + BC_CO + (params ? "&" + params : "");
+  const bcFetch = async (url, label, retried) => {
     const r = await fetch(url, { headers: { Authorization: "Bearer " + accessToken, Accept: "application/json" } });
     if (r.status === 401) {
-      if (!retried && await refreshAccessToken()) return bcGet(entity, params, true);
+      if (!retried && await refreshAccessToken()) return bcFetch(url, label, true);
       reauthenticate();
       throw new Error("Token expired");
     }
     if (!r.ok) {
       const txt = await r.text().catch(() => "");
-      throw new Error("BC " + r.status + " on " + entity + (txt ? ": " + txt.slice(0,150) : ""));
+      throw new Error("BC " + r.status + " on " + label + (txt ? ": " + txt.slice(0,150) : ""));
     }
     return r.json();
   };
+  const bcGet  = (entity, params) => bcFetch(BC_ROOT + entity + "?" + BC_CO + (params ? "&" + params : ""), entity);
+  const apiGet = (resource, params) => bcFetch(BC_API + resource + (params ? "?" + params : ""), resource);
 
   try {
     const today = new Date().toISOString().slice(0,10);
@@ -687,13 +694,71 @@ async function fetchAll() {
       last7.push(d.toISOString().slice(0,10));
     }
 
+    // ---- Currency conversion ----
+    // Sales and purchase document amounts are in the document's own currency. They are converted to GBP
+    // at Business Central's latest exchange rate (Currency Exchange Rates table) on or before today.
+    const fxRates = {};
+    let fxProblem = false;
+    const fxRate = (cur) => {
+      if (!fxRates[cur]) {
+        const filter = encodeURIComponent("currencyCode eq '" + cur.replace(/'/g, "''") + "' and startingDate le " + today);
+        fxRates[cur] = apiGet("currencyExchangeRates", "$filter=" + filter + "&$orderby=startingDate%20desc&$top=1")
+          .then(res => {
+            const row = (res.value || [])[0];
+            const ex = Number(row && row.exchangeRateAmount), rel = Number(row && row.relationalExchangeRateAmount);
+            if (!row || !ex || !rel || (row.relationalCurrencyCode && row.relationalCurrencyCode !== LCY)) return null;
+            return { f: rel / ex, date: row.startingDate };
+          })
+          .catch(e => { if (e.message === "Token expired") throw e; console.warn("Exchange rate for " + cur + " failed:", e.message); return null; });
+      }
+      return fxRates[cur];
+    };
+    // { gbp, cur, amt, ok }: cur is "" for GBP; ok is false when no rate was found (amount left unconverted)
+    const toGbp = async (amt, cur) => {
+      amt = Number(amt || 0);
+      cur = String(cur || "").trim().toUpperCase();
+      if (!cur || cur === LCY) return { gbp: amt, cur: "", amt, ok: true };
+      const r = await fxRate(cur);
+      if (!r) { fxProblem = true; return { gbp: amt, cur, amt, ok: false }; }
+      return { gbp: amt * r.f, cur, amt, ok: true };
+    };
+    // Document currency codes from the standard API: { number: currencyCode }, or null if the lookup failed
+    const currencyMap = (resource, filter) =>
+      apiGet(resource, "$select=number,currencyCode&$filter=" + encodeURIComponent(filter) + "&$top=5000")
+        .then(res => { const m = {}; (res.value || []).forEach(r => { m[String(r.number || "").trim()] = r.currencyCode; }); return m; })
+        .catch(e => { if (e.message === "Token expired") throw e; console.warn(resource + " currency codes failed:", e.message); return null; });
+    const soCurP = currencyMap("salesOrders", "orderDate ge " + last7[0] + " and orderDate le " + today);
+    const poCurP = currencyMap("purchaseOrders", "requestedReceiptDate eq " + today);
+    soCurP.catch(() => {}); poCurP.catch(() => {});
+
+    // Overdue debtors: Remaining Amt. (LCY) is already in GBP. If the page doesn't publish it, convert
+    // Remaining Amount using each entry's currency code instead.
+    const loadOverdue = async () => {
+      const base = "&$filter=Open%20eq%20true%20and%20Due_Date%20lt%20" + today + "&$top=2000";
+      const attempt = async (select, how) => {
+        try { return { rows: (await bcGet("Cust_LedgerEntries", "$select=" + select + base)).value || [], how }; }
+        catch (e) { if (e.message === "Token expired") throw e; console.warn("Overdue debtors (" + select + ") failed:", e.message); return null; }
+      };
+      const res = await attempt("Remaining_Amt_LCY,Open,Due_Date", "lcy")
+        || await attempt("Remaining_Amount,Currency_Code,Open,Due_Date", "convert")
+        || await attempt("Remaining_Amount,Open,Due_Date", "raw");
+      if (!res) return null;
+      let total = 0;
+      for (const r of res.rows) {
+        if (res.how === "lcy") total += Number(r.Remaining_Amt_LCY || 0);
+        else if (res.how === "convert") total += (await toGbp(r.Remaining_Amount, r.Currency_Code)).gbp;
+        else total += Number(r.Remaining_Amount || 0);
+      }
+      return { total, converted: res.how !== "raw" };
+    };
+
     const [soRes, poRes, glRes, rcptRes, shipRes, debtorRes] = await Promise.all([
       bcGet("SalesOrder", "$select=No,Sell_to_Customer_Name,Order_Date,Status&$filter=Order_Date%20eq%20" + today + "&$orderby=Order_Date%20desc&$top=50"),
       bcGet("purchaseDocuments", "$select=number,buyFromVendorName,orderDate,requestedReceiptDate,amountIncludingVat,status&$filter=requestedReceiptDate%20eq%20" + today + "&$orderby=requestedReceiptDate%20desc&$top=50"),
       bcGet("G_LEntries", "$select=G_L_Account_No,Amount&$filter=(G_L_Account_No%20eq%20%274000%27%20or%20G_L_Account_No%20eq%20%274009%27)%20and%20Posting_Date%20ge%20" + monthStart + "%20and%20Posting_Date%20le%20" + today + "&$top=2000"),
       bcGet("ItemLedgerEntries", "$select=Entry_No,Item_No,Quantity,Posting_Date&$filter=Entry_Type%20eq%20%27Purchase%27%20and%20Posting_Date%20eq%20" + today + "&$top=200"),
       bcGet("Posted_Sales_Shipment_Excel", "$select=No,Sell_to_Customer_Name,Shipment_Date,Order_No&$filter=Shipment_Date%20eq%20" + today + "&$top=200"),
-      bcGet("Cust_LedgerEntries", "$select=Remaining_Amount,Open,Due_Date&$filter=Open%20eq%20true%20and%20Due_Date%20lt%20" + today + "&$top=2000").catch(() => ({value:[]})),
+      loadOverdue(),
     ]);
 
     // Alert KPI fetches (parallel)
@@ -740,8 +805,12 @@ async function fetchAll() {
         const lineResults = await Promise.all(orders.map(r =>
           bcGet("salesDocumentLines", "$filter=documentNumber%20eq%20%27" + encodeURIComponent(r.No) + "%27&$select=documentNumber,amount&$top=200").catch(() => ({value:[]}))
         ));
-        const dayTotal = lineResults.reduce((s, res) =>
-          s + (res.value || []).reduce((ss, l) => ss + Number(l.amount || 0), 0), 0);
+        const soCur = (await soCurP) || {};
+        let dayTotal = 0;
+        for (let j = 0; j < orders.length; j++) {
+          const amt = (lineResults[j].value || []).reduce((ss, l) => ss + Number(l.amount || 0), 0);
+          dayTotal += (await toGbp(amt, soCur[String(orders[j].No || "").trim()])).gbp;
+        }
         sparkLineTotals.push(dayTotal);
       } catch(e) { sparkLineTotals.push(0); }
     }
@@ -810,6 +879,18 @@ async function fetchAll() {
       } catch(le) { console.warn("Lines fetch failed:", le.message); }
     }
 
+    // Today's order totals and purchase orders to GBP (original amounts kept for display)
+    const soCurToday = await soCurP;
+    const poCur = await poCurP;
+    if (!soCurToday || !poCur) fxProblem = true;
+    const soFx = {};
+    for (const [no, amt] of Object.entries(soLineTotals)) {
+      soFx[no] = await toGbp(amt, (soCurToday || {})[String(no).trim()]);
+      soLineTotals[no] = soFx[no].gbp;
+    }
+    const poRows = poRes.value || [];
+    for (const r of poRows) r._fx = await toGbp(r.amountIncludingVat, (poCur || {})[String(r.number || "").trim()]);
+
     const gl4000 = (glRes.value || []).filter(r => r.G_L_Account_No === "4000").reduce((s, r) => s + Number(r.Amount || 0), 0);
     const gl4009 = (glRes.value || []).filter(r => r.G_L_Account_No === "4009").reduce((s, r) => s + Number(r.Amount || 0), 0);
     document.getElementById("kpi-gl").textContent = gbp(Math.abs(gl4000) - Math.abs(gl4009));
@@ -830,11 +911,14 @@ async function fetchAll() {
     document.getElementById("meter-label").textContent = gbp(soVal) + " of £16,678 (" + Math.round(soVal / GAUGE_THRESH * 100) + "%)";
     document.getElementById("meter-label").style.color = meterColor;
 
-    renderSO(soOrders, soLineTotals);
-    renderPO(poRes.value || []);
+    renderSO(soOrders, soLineTotals, soFx);
+    const fxCount = Object.values(soFx).filter(x => x.cur && x.ok).length;
+    const sovSub = document.getElementById("kpi-sov-sub");
+    if (sovSub) sovSub.textContent = "today, excl. VAT" + (fxCount ? " · " + fxCount + " converted to GBP" : "");
+    renderPO(poRows);
     renderReceipts(rcptRes.value || []);
     renderShipments(shipRes.value || [], shipLinesRes.value || []);
-    renderOverdue(debtorRes.value || []);
+    renderOverdue(debtorRes);
 
     const sniEl = document.getElementById("kpi-sni");
     if (sniEl) { sniEl.textContent = gbp(sniTotal); }
@@ -845,6 +929,9 @@ async function fetchAll() {
 
     document.getElementById("footer-ts").textContent = "Last updated: " + new Date().toLocaleString("en-GB") + " · Auto-refreshes every 10 min";
     dbg.textContent = "Live Mouldshop · " + soOrders.length + " sales orders · " + (poRes.value||[]).length + " purchase orders";
+    const rateList = (await Promise.all(Object.entries(fxRates).map(async ([c, p]) => { const r = await p.catch(() => null); return r ? c + " 1 = £" + r.f.toFixed(4) + " (" + r.date + ")" : null; }))).filter(Boolean);
+    if (rateList.length) dbg.textContent += " · BC rates: " + rateList.join(", ");
+    if (fxProblem) dbg.textContent += " · some foreign-currency amounts could not be converted";
     setStatus("live", "Live");
   } catch(e) {
     if (e.message !== "Token expired") {
@@ -855,7 +942,8 @@ async function fetchAll() {
   }
 }
 
-function renderSO(rows, lineTotals) {
+function renderSO(rows, lineTotals, fx) {
+  fx = fx || {};
   lineTotals = lineTotals || {};
   const totalVal = Object.values(lineTotals).reduce((s,v) => s+v, 0);
   document.getElementById("kpi-so").textContent  = num(rows.length);
@@ -866,7 +954,7 @@ function renderSO(rows, lineTotals) {
     <td class="mono">${r.No||"—"}</td>
     <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.Sell_to_Customer_Name||"—"}</td>
     <td style="white-space:nowrap">${fmtd(r.Order_Date)}</td>
-    <td style="text-align:right">${lineTotals[r.No] != null ? gbp(lineTotals[r.No]) : "—"}</td>
+    <td style="text-align:right">${lineTotals[r.No] != null ? gbp(lineTotals[r.No]) + fxNote(fx[r.No]) : "—"}</td>
     <td>${statusTag(r.Status)}</td></tr>`).join("")
     : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No sales orders today</td></tr>';
 }
@@ -878,7 +966,7 @@ function renderPO(rows) {
     <td class="mono">${r.number||"—"}</td>
     <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.buyFromVendorName||"—"}</td>
     <td style="white-space:nowrap">${fmtd(r.requestedReceiptDate)}</td>
-    <td style="text-align:right">${gbp(r.amountIncludingVat)}</td>
+    <td style="text-align:right">${r._fx ? gbp(r._fx.gbp) + fxNote(r._fx) : gbp(r.amountIncludingVat)}</td>
     <td>${statusTag(r.status)}</td></tr>`).join("")
     : '<tr><td colspan="5" style="text-align:center;color:var(--fg3);padding:24px">No open purchase orders</td></tr>';
 }
@@ -897,10 +985,11 @@ function renderShipments(rows, lines) {
   const linesEl = document.getElementById("kpi-shiplines");
   if (linesEl) linesEl.textContent = num(lines.length);
 }
-function renderOverdue(rows) {
-  const total = rows.reduce((s, r) => s + Number(r.Remaining_Amount || r.Amount || 0), 0);
+function renderOverdue(res) {
   const el = document.getElementById("kpi-overdue");
-  if (el) { el.textContent = gbp(Math.abs(total)); el.style.color = "var(--bad)"; }
+  if (el) { el.textContent = res ? gbp(Math.abs(res.total)) : "—"; el.style.color = "var(--bad)"; }
+  const sub = document.getElementById("kpi-overdue-sub");
+  if (sub) sub.textContent = !res ? "couldn't load" : res.converted ? "GBP, overdue balance" : "overdue balance, not converted to GBP";
 }
 
 init();
