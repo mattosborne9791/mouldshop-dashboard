@@ -371,14 +371,28 @@ const REFRESH_MS = 10 * 60 * 1000;
 
 let accessToken = null, refreshTimer = null, silentTimer = null;
 
+/* ---------- Auth ----------
+   Stays signed in: the refresh token is kept even after the 1-hour access token
+   expires, the token is renewed before every data fetch and when the screen wakes,
+   and a 401 is retried once with a fresh token. Microsoft limits browser refresh
+   tokens to 24 hours, so when that runs out the page bounces through Microsoft
+   sign-in with prompt=none: if the browser is still signed in to Microsoft it comes
+   straight back without asking for anything. */
+const AUTO_AUTH_KEY = "bc_auto_auth_at", USER_KEY = "bc_user";
+let refreshing = null, authRedirecting = false;
+
 function getStoredToken() {
   try {
     const s = localStorage.getItem("bc_token");
-    if (!s) return null;
-    const d = JSON.parse(s);
-    if (Date.now() > d.exp) { localStorage.removeItem("bc_token"); return null; }
-    return d;
+    return s ? JSON.parse(s) : null; // keep it even if the access token has expired: the refresh token still works
   } catch { return null; }
+}
+function rememberUser(token) {
+  try {
+    const p = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    const u = p.upn || p.preferred_username || p.unique_name || p.email;
+    if (u) localStorage.setItem(USER_KEY, u);
+  } catch {}
 }
 function storeToken(token, refreshToken, expiresIn) {
   try {
@@ -386,39 +400,81 @@ function storeToken(token, refreshToken, expiresIn) {
     if (refreshToken) data.refresh = refreshToken;
     localStorage.setItem("bc_token", JSON.stringify(data));
   } catch {}
+  rememberUser(token);
   scheduleSilentRefresh(expiresIn);
 }
 function scheduleSilentRefresh(expiresIn) {
   clearTimeout(silentTimer);
-  const refreshIn = Math.max((expiresIn - 300), 60) * 1000; // 5 min before expiry
-  silentTimer = setTimeout(silentRefresh, refreshIn);
+  silentTimer = setTimeout(silentRefresh, Math.max(expiresIn - 300, 60) * 1000);
 }
-async function silentRefresh() {
-  try {
-    const stored = JSON.parse(localStorage.getItem("bc_token") || "{}");
-    if (!stored.refresh) { startAuth(); return; }
-    const res = await fetch(`https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: CLIENT, grant_type: "refresh_token",
-        refresh_token: stored.refresh, scope: SCOPE + " offline_access"
-      })
-    });
-    const data = await res.json();
-    if (data.access_token) {
+// Resolves true (fresh token), false (refresh token rejected/missing) or null (network error).
+function refreshAccessToken() {
+  if (refreshing) return refreshing;
+  refreshing = (async () => {
+    const stored = getStoredToken() || {};
+    if (stored.token && stored.exp > Date.now() + 5 * 60 * 1000 && stored.token !== accessToken) {
+      // another tab or dashboard already renewed it
+      accessToken = stored.token;
+      scheduleSilentRefresh(Math.round((stored.exp - Date.now()) / 1000));
+      return true;
+    }
+    if (!stored.refresh) return false;
+    let data;
+    try {
+      const res = await fetch(`https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ client_id: CLIENT, grant_type: "refresh_token", refresh_token: stored.refresh, scope: SCOPE + " offline_access" })
+      });
+      data = await res.json();
+    } catch { return null; }
+    if (data && data.access_token) {
       accessToken = data.access_token;
       storeToken(data.access_token, data.refresh_token || stored.refresh, data.expires_in || 3600);
-    } else {
-      // Refresh token rejected (expired or revoked) — clear and re-authenticate
-      try { localStorage.removeItem("bc_token"); } catch {}
-      startAuth();
+      return true;
     }
-  } catch(e) {
-    // Network error — retry in 60 seconds
-    silentTimer = setTimeout(silentRefresh, 60000);
-  }
+    return false;
+  })().finally(() => { refreshing = null; });
+  return refreshing;
 }
+// Make sure accessToken is usable right now (timers stall while the PC sleeps).
+async function ensureToken() {
+  const s = getStoredToken();
+  if (s && s.token && Date.now() < s.exp) { accessToken = s.token; return true; }
+  return refreshAccessToken();
+}
+async function silentRefresh() {
+  const ok = await refreshAccessToken();
+  if (ok === null) { clearTimeout(silentTimer); silentTimer = setTimeout(silentRefresh, 60000); return; } // offline: try again in a minute
+  if (!ok) reauthenticate();
+}
+function showSignedOut(msg) {
+  clearInterval(refreshTimer);
+  document.getElementById("auth-screen").style.display = "flex";
+  document.getElementById("dashboard").style.display = "none";
+  document.getElementById("connect-btn").style.display = "";
+  document.getElementById("refresh-btn").style.display = "none";
+  setStatus("grey", msg || "Session expired — please reconnect");
+}
+// Refresh token has run out: re-sign-in silently via Microsoft (at most once every 5 minutes, so it can't loop).
+function reauthenticate() {
+  if (authRedirecting) return;
+  let last = 0;
+  try { last = Number(localStorage.getItem(AUTO_AUTH_KEY)) || 0; } catch {}
+  if (Date.now() - last < 5 * 60 * 1000) { showSignedOut(); return; }
+  try { localStorage.setItem(AUTO_AUTH_KEY, String(Date.now())); } catch {}
+  authRedirecting = true;
+  setStatus("grey", "Renewing sign-in…");
+  startAuth(true);
+}
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState !== "visible" || !accessToken) return;
+  const s = getStoredToken();
+  if (s && Date.now() < s.exp) return;
+  const ok = await ensureToken();
+  if (ok) fetchAll();
+  else if (ok === false) reauthenticate();
+});
 function b64url(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 }
@@ -427,21 +483,32 @@ async function pkce() {
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
   return { verifier, challenge: b64url(hash) };
 }
-async function startAuth() {
+async function startAuth(silent) {
+  silent = silent === true;
   const { verifier, challenge } = await pkce();
   const state = b64url(crypto.getRandomValues(new Uint8Array(8)));
   try { sessionStorage.setItem("pkce_v", verifier); sessionStorage.setItem("pkce_s", state); } catch {}
-  const params = new URLSearchParams({
+  const p = {
     client_id: CLIENT, response_type: "code", redirect_uri: REDIRECT,
     scope: SCOPE + " offline_access", state,
-    code_challenge: challenge, code_challenge_method: "S256", prompt: "select_account"
-  });
-  location.href = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/authorize?${params}`;
+    code_challenge: challenge, code_challenge_method: "S256",
+    prompt: silent ? "none" : "select_account"
+  };
+  if (silent) { try { const u = localStorage.getItem(USER_KEY); if (u) p.login_hint = u; } catch {} }
+  location.href = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/authorize?${new URLSearchParams(p)}`;
 }
 async function handleCallback() {
   const params = new URLSearchParams(location.search);
   const code = params.get("code"), state = params.get("state"), err = params.get("error");
-  if (err) { showError("Auth error: " + params.get("error_description")); return; }
+  if (err) {
+    history.replaceState({}, "", REDIRECT);
+    if (/login_required|interaction_required|consent_required|account_selection_required/.test(err)) {
+      showSignedOut("Signed out of Microsoft — please reconnect");
+    } else {
+      showError("Auth error: " + params.get("error_description"));
+    }
+    return;
+  }
   if (!code) return;
   let verifier, savedState;
   try { verifier = sessionStorage.getItem("pkce_v"); savedState = sessionStorage.getItem("pkce_s"); } catch {}
@@ -465,10 +532,20 @@ async function handleCallback() {
   } catch(e) { showError("Network error: " + e.message); }
 }
 async function init() {
-  if (location.search.includes("code=")) { await handleCallback(); return; }
+  if (/[?&](code|error)=/.test(location.search)) { await handleCallback(); return; }
   const stored = getStoredToken();
-  if (stored) { accessToken = stored.token; scheduleSilentRefresh(Math.max(Math.round((stored.exp - Date.now()) / 1000), 60)); onAuthenticated(); return; }
-  setStatus("grey", "Not connected");
+  if (!stored) { setStatus("grey", "Not connected"); return; }
+  const ok = await ensureToken();
+  if (ok) {
+    if (stored.exp > Date.now()) scheduleSilentRefresh(Math.max(Math.round((stored.exp - Date.now()) / 1000), 60));
+    onAuthenticated();
+  } else if (ok === null) {
+    // offline at start-up: show the dashboard and keep trying to renew
+    accessToken = stored.token; onAuthenticated();
+    clearTimeout(silentTimer); silentTimer = setTimeout(silentRefresh, 60000);
+  } else {
+    reauthenticate();
+  }
 }
 async function onAuthenticated() {
   document.getElementById("auth-screen").style.display = "none";
@@ -579,20 +656,18 @@ async function filterPOsWithOutstandingLines(bcGet, pos) {
 }
 
 async function fetchAll() {
+  const tokOk = await ensureToken();
+  if (tokOk === false) { reauthenticate(); return; }
   const dbg = document.getElementById("entity-debug");
   dbg.textContent = "Live Mouldshop · fetching data…";
   setStatus("grey", "Refreshing…");
 
-  const bcGet = async (entity, params) => {
+  const bcGet = async (entity, params, retried) => {
     const url = BC_ROOT + entity + "?" + BC_CO + (params ? "&" + params : "");
     const r = await fetch(url, { headers: { Authorization: "Bearer " + accessToken, Accept: "application/json" } });
     if (r.status === 401) {
-      accessToken = null;
-      try { localStorage.removeItem("bc_token"); } catch {}
-      document.getElementById("auth-screen").style.display = "flex";
-      document.getElementById("dashboard").style.display = "none";
-      document.getElementById("connect-btn").style.display = "";
-      setStatus("grey", "Session expired — please reconnect");
+      if (!retried && await refreshAccessToken()) return bcGet(entity, params, true);
+      reauthenticate();
       throw new Error("Token expired");
     }
     if (!r.ok) {
