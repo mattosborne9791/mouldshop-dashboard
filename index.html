@@ -661,6 +661,23 @@ async function filterPOsWithOutstandingLines(bcGet, pos) {
   return pos.filter(p => keep.has((p.number || "").trim()));
 }
 
+// Daily Sales Value starts where the last sales orders email finished. When the email is sent, its
+// scheduled task saves marker.json next to this page: {date, start, end} = the day it covered and the
+// order numbers it started after / finished on. On the email's own day the dashboard keeps counting from
+// "start" (so the day's total stays whole until midnight); from the next day it counts orders after "end".
+async function loadSalesMarker() {
+  try {
+    const r = await fetch("marker.json?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return null;
+    const m = await r.json();
+    const ok = s => typeof s === "string" && /^[A-Z]+[0-9]+$/.test(s);
+    if (!ok(m.end)) return null;
+    const todayLdn = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+    if (m.date === todayLdn && ok(m.start)) return { after: m.start };
+    return { after: m.end };
+  } catch { return null; }
+}
+
 async function fetchAll() {
   const tokOk = await ensureToken();
   if (tokOk === false) { reauthenticate(); return; }
@@ -752,8 +769,17 @@ async function fetchAll() {
       return { total, converted: res.how !== "raw" };
     };
 
+    let salesMarker = await loadSalesMarker();
+    const soQuery = async () => {
+      if (salesMarker) {
+        try { return await bcGet("SalesOrder", "$select=No,Sell_to_Customer_Name,Order_Date,Status&$filter=No%20gt%20%27" + salesMarker.after + "%27&$orderby=No%20asc&$top=1000"); }
+        catch (e) { if (e.message === "Token expired") throw e; console.warn("Marker query failed, using order date:", e.message); salesMarker = null; }
+      }
+      return bcGet("SalesOrder", "$select=No,Sell_to_Customer_Name,Order_Date,Status&$filter=Order_Date%20eq%20" + today + "&$orderby=Order_Date%20desc&$top=50");
+    };
+
     const [soRes, poRes, glRes, rcptRes, shipRes, debtorRes] = await Promise.all([
-      bcGet("SalesOrder", "$select=No,Sell_to_Customer_Name,Order_Date,Status&$filter=Order_Date%20eq%20" + today + "&$orderby=Order_Date%20desc&$top=50"),
+      soQuery(),
       bcGet("purchaseDocuments", "$select=number,buyFromVendorName,orderDate,requestedReceiptDate,amountIncludingVat,status&$filter=requestedReceiptDate%20eq%20" + today + "&$orderby=requestedReceiptDate%20desc&$top=50"),
       bcGet("G_LEntries", "$select=G_L_Account_No,Amount&$filter=(G_L_Account_No%20eq%20%274000%27%20or%20G_L_Account_No%20eq%20%274009%27)%20and%20Posting_Date%20ge%20" + monthStart + "%20and%20Posting_Date%20le%20" + today + "&$top=2000"),
       bcGet("ItemLedgerEntries", "$select=Entry_No,Item_No,Quantity,Posting_Date&$filter=Entry_Type%20eq%20%27Purchase%27%20and%20Posting_Date%20eq%20" + today + "&$top=200"),
@@ -914,7 +940,7 @@ async function fetchAll() {
     renderSO(soOrders, soLineTotals, soFx);
     const fxCount = Object.values(soFx).filter(x => x.cur && x.ok).length;
     const sovSub = document.getElementById("kpi-sov-sub");
-    if (sovSub) sovSub.textContent = "today, excl. VAT" + (fxCount ? " · " + fxCount + " converted to GBP" : "");
+    if (sovSub) sovSub.textContent = (salesMarker ? "since " + salesMarker.after + " (last report), excl. VAT" : "today, excl. VAT") + (fxCount ? " · " + fxCount + " converted to GBP" : "");
     renderPO(poRows);
     renderReceipts(rcptRes.value || []);
     renderShipments(shipRes.value || [], shipLinesRes.value || []);
