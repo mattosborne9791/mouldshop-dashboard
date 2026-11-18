@@ -940,7 +940,7 @@ async function fetchAll() {
     renderSO(soOrders, soLineTotals, soFx);
     const fxCount = Object.values(soFx).filter(x => x.cur && x.ok).length;
     const sovSub = document.getElementById("kpi-sov-sub");
-    if (sovSub) sovSub.textContent = (salesMarker ? "since " + salesMarker.after + " (last report), excl. VAT" : "today, excl. VAT") + (fxCount ? " · " + fxCount + " converted to GBP" : "");
+    if (sovSub) sovSub.textContent = "today, excl. VAT" + (fxCount ? " · " + fxCount + " converted to GBP" : "");
     renderPO(poRows);
     renderReceipts(rcptRes.value || []);
     renderShipments(shipRes.value || [], shipLinesRes.value || []);
